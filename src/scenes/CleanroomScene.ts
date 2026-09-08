@@ -72,6 +72,7 @@ export class CleanroomScene extends Phaser.Scene {
   private dragStartY = 0;
   private totalDragDistance = 0;
   private readonly dragThreshold = 6;
+  private justSelectedMachineOnPointerUp = false;
   private onMachineClickCallback?: (machine: MachineData) => void;
 
   constructor() {
@@ -183,8 +184,8 @@ export class CleanroomScene extends Phaser.Scene {
    * 2.5D 螢幕座標反變換為格點座標 (Screen to Grid)
    */
   public toGrid(worldX: number, worldY: number): { gridX: number; gridY: number } {
-    const gx = Math.floor(worldX / this.tileWidth + worldY / this.tileHeight + 0.5);
-    const gy = Math.floor(worldY / this.tileHeight - worldX / this.tileWidth + 0.5);
+    const gx = Math.round(worldX / this.tileWidth + worldY / this.tileHeight);
+    const gy = Math.round(worldY / this.tileHeight - worldX / this.tileWidth);
     return { gridX: gx, gridY: gy };
   }
 
@@ -394,6 +395,7 @@ export class CleanroomScene extends Phaser.Scene {
             if (_pointer.event) _pointer.event.stopPropagation();
             SoundEffects.playClick();
             if (this.isPlannerMode && this.plannerTool === 'MOVE_MACHINE') {
+              this.justSelectedMachineOnPointerUp = true;
               this.selectMachineToMove(machine);
             } else if (!this.isPlannerMode) {
               if (this.onMachineClickCallback) {
@@ -849,6 +851,14 @@ export class CleanroomScene extends Phaser.Scene {
         }
       }
     } else if (this.plannerTool === 'MOVE_MACHINE' && this.movingMachineId) {
+      const machine = this.saveGame.machines.find(m => m.id === this.movingMachineId);
+      if (!machine) return;
+
+      // 如果點選到機台原本所在的格子，忽略以防止誤放或立刻取消
+      if (machine.gridX === gx && machine.gridY === gy) {
+        return;
+      }
+
       // 檢查該格是否已被其他機台佔用
       const occupied = this.saveGame.machines.some(m => m.id !== this.movingMachineId && m.gridX === gx && m.gridY === gy);
       if (occupied) {
@@ -856,18 +866,15 @@ export class CleanroomScene extends Phaser.Scene {
         return;
       }
 
-      const machine = this.saveGame.machines.find(m => m.id === this.movingMachineId);
-      if (machine) {
-        machine.gridX = gx;
-        machine.gridY = gy;
-        SoundEffects.playDing();
-        this.movingMachineId = null;
-        this.selectionRingGraphics.clear();
-        this.plannerIndicatorGraphics.clear();
-        this.renderMachines();
-        this.renderOHTRails();
-        this.onStateUpdateCallback?.();
-      }
+      machine.gridX = gx;
+      machine.gridY = gy;
+      SoundEffects.playDing();
+      this.movingMachineId = null;
+      this.selectionRingGraphics.clear();
+      this.plannerIndicatorGraphics.clear();
+      this.renderMachines();
+      this.renderOHTRails();
+      this.onStateUpdateCallback?.();
     }
   }
 
@@ -920,6 +927,12 @@ export class CleanroomScene extends Phaser.Scene {
       const wasDragging = this.totalDragDistance > this.dragThreshold;
       this.isDragging = false;
       this.pointerDownMachineId = null;
+
+      // 如果剛剛在同一 frame 才剛點選並拿起機台，則略過本次格點點擊，避免瞬間又放下！
+      if (this.justSelectedMachineOnPointerUp) {
+        this.justSelectedMachineOnPointerUp = false;
+        return;
+      }
 
       if (document.querySelector('.modal-backdrop') || (document.getElementById('modal-container')?.children.length ?? 0) > 0) {
         return;

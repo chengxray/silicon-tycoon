@@ -33,6 +33,9 @@ export interface PlayerProfile {
   popularity: number;
   unlockedK1: K1TechLevel;
   unlockedCleanroomClass: string;
+  totalOrdersFulfilled?: number;
+  totalWafersDelivered?: number;
+  rdInvestedCash?: number;
 }
 
 export interface UnlockedFeatures {
@@ -189,6 +192,7 @@ export interface FinancialState {
   currentDay: number;
   currentWeek: number;
   currentMonth: number;
+  currentDateStr?: string; // 現實世界同步日期 (YYYY-MM-DD)
   today: FinancialRecord;
   thisWeek: FinancialRecord;
   thisMonth: FinancialRecord;

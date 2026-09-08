@@ -7,6 +7,8 @@
 import { SaveGameV2 } from '../types';
 import { ProductionEngine } from '../engine/ProductionEngine';
 import { EconomyEngine } from '../engine/EconomyEngine';
+import { FinanceEngine } from '../engine/FinanceEngine';
+import { TechTreeEngine } from '../engine/TechTreeEngine';
 import { SoundEffects } from '../audio/SoundEffects';
 
 export interface TopHUDCallbacks {
@@ -23,6 +25,7 @@ export interface TopHUDCallbacks {
   onOpenFinance?: () => void;
   onOpenLogin?: () => void;
   onOpenPlanner?: () => void;
+  onOpenTechTree?: () => void;
 }
 
 export class TopHUD {
@@ -41,10 +44,18 @@ export class TopHUD {
     const hasCmp = state.unlockedFeatures.cmp;
 
     // 計算 Rolling Yield 與 Trust Multiplier
+    const isProducing = state.activeLots.some(l => l.status === 'PROCESSING') || state.machines.some(m => m.status === 'PROCESSING');
     const rollingYield = state.rollingYieldHistory.length > 0
       ? state.rollingYieldHistory.slice(-5).reduce((a, b) => a + b, 0) / Math.min(5, state.rollingYieldHistory.length)
       : null;
     const trustMult = EconomyEngine.calculateTrustMultiplier(rollingYield);
+
+    // 研發進度與晉升檢測
+    const techStatus = TechTreeEngine.getProgressionStatus(state);
+
+    // 現實日曆年月日同步
+    const todayStr = state.financialState?.currentDateStr || FinanceEngine.getTodayDateString();
+    const dayOfWeekName = ['日', '一', '二', '三', '四', '五', '六'][new Date().getDay()];
 
     // 計算工廠負荷量 %
     const workloadInfo = ProductionEngine.calculateFactoryWorkload(
@@ -66,7 +77,7 @@ export class TopHUD {
     const isMuted = SoundEffects.isAudioMuted();
 
     this.container.innerHTML = `
-      <!-- 左側：創辦人與公司資訊 (附帶 PvZ 1 經典使用者登入切換) -->
+      <!-- 左側：創辦人與公司資訊 (附帶 PvZ 1 經典使用者登入切換與現實日曆同步) -->
       <div class="flex items-center gap-2.5">
         <div id="btn-hud-profile-avatar" class="w-10 h-10 rounded-full border border-cyan-400/50 bg-slate-800 flex items-center justify-center text-xl shadow-inner cursor-pointer hover:border-amber-400 hover:scale-105 transition-all" title="點擊切換存檔 / 登入使用者 (PvZ 1 Style)">
           👤
@@ -76,6 +87,9 @@ export class TopHUD {
             <span class="text-sm font-bold text-slate-100 tracking-wide">${p.companyName}</span>
             <span class="text-xs px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-500/40 font-mono">
               Tier ${p.foundryTier}
+            </span>
+            <span class="text-[10px] text-cyan-400/90 font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-cyan-500/30" title="遊戲日曆與現實世界完全同步">
+              📅 ${todayStr} (週${dayOfWeekName})
             </span>
           </div>
           <div class="text-xs text-slate-400 flex items-center gap-2">
@@ -108,15 +122,17 @@ export class TopHUD {
           </div>
         </div>
 
-        <!-- 3. 滾動良率指數 (RollingYieldIndex) -->
+        <!-- 3. 滾動良率指數 (RollingYieldIndex) - 未生產時凍結顯示 -->
         <button id="btn-hud-yield" class="text-center relative group cursor-pointer hover:bg-slate-800/80 px-2 py-1 rounded-lg transition-colors border border-transparent hover:border-cyan-500/30" title="點擊檢視 25 晶粒蒙地卡羅良率晶圓圖 (Wafer Map)">
           <div class="text-[11px] text-slate-400 font-medium flex items-center gap-1 justify-center">
             <span>品質良率</span>
             <span class="text-[10px] text-cyan-400">🔍</span>
           </div>
-          <div class="text-sm font-bold font-mono ${rollingYield && rollingYield >= 0.9 ? 'text-emerald-400' : 'text-amber-400'}">
+          <div class="text-sm font-bold font-mono ${isProducing ? (rollingYield && rollingYield >= 0.9 ? 'text-emerald-400' : 'text-amber-400') : 'text-slate-400'}">
             ${rollingYield !== null ? `${(rollingYield * 100).toFixed(1)}%` : 'N/A'}
-            <span class="text-[10px] text-slate-400 font-normal">(${trustMult.toFixed(2)}x)</span>
+            <span class="text-[10px] ${isProducing ? 'text-slate-400 font-normal' : 'text-amber-400/90 font-medium'}">
+              ${isProducing ? `(${trustMult.toFixed(2)}x)` : '(待命暫停)'}
+            </span>
           </div>
         </button>
 
@@ -147,6 +163,12 @@ export class TopHUD {
         <!-- 財報 (日周月收支分析) -->
         <button id="btn-finance" class="btn-sci-fi text-xs bg-cyan-950/40 border-cyan-500/50 text-cyan-300 hover:text-white" title="開啟日、周、月收支財務分析">
           📊 財報
+        </button>
+
+        <!-- 科技樹研發突破 (次世代機台解鎖) -->
+        <button id="btn-techtree" class="btn-sci-fi relative text-xs bg-cyan-950/50 border-cyan-500/60 text-cyan-300 hover:text-white ${techStatus.canAdvance ? 'border-emerald-400 text-emerald-300 ring-2 ring-emerald-500/40 animate-pulse' : ''}" title="檢視半導體製程科技樹 (目前: Tier ${p.foundryTier})">
+          🔬 研發 (T${p.foundryTier})
+          ${techStatus.canAdvance ? '<span class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-slate-900"></span>' : ''}
         </button>
 
         <!-- MES 自動派工開關 -->
@@ -249,6 +271,13 @@ export class TopHUD {
       e.stopPropagation();
       SoundEffects.playClick();
       this.callbacks.onOpenAdvisory();
+    });
+
+    // 科技樹按鈕
+    document.getElementById('btn-techtree')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      SoundEffects.playClick();
+      this.callbacks.onOpenTechTree?.();
     });
 
     // 財報按鈕與資金卡片點擊

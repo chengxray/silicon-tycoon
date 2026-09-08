@@ -63,6 +63,7 @@ export class WaferMapModal {
     const particleCount = this.dies.filter(d => d.defectType === 'PARTICLE').length;
     const defocusCount = this.dies.filter(d => d.defectType === 'OPTICAL_DEFOCUS').length;
 
+    const isProducing = state.activeLots.some(l => l.status === 'PROCESSING') || state.machines.some(m => m.status === 'PROCESSING');
     const rollingYield = state.rollingYieldHistory.length > 0
       ? (state.rollingYieldHistory.reduce((a, b) => a + b, 0) / state.rollingYieldHistory.length * 100).toFixed(1) + '%'
       : 'N/A';
@@ -183,11 +184,11 @@ export class WaferMapModal {
 
                 <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
                   <div class="text-[10px] text-slate-400">全廠滑動良率指數</div>
-                  <div class="text-xl font-bold text-cyan-300">
+                  <div class="text-xl font-bold ${isProducing ? 'text-cyan-300' : 'text-slate-400'}">
                     ${rollingYield}
                   </div>
-                  <div class="text-[10px] text-slate-400 mt-0.5">
-                    5 批次滑動窗口
+                  <div class="text-[10px] ${isProducing ? 'text-slate-400' : 'text-amber-400/90'} mt-0.5 font-sans">
+                    ${isProducing ? '5 批次滑動窗口' : '⏸️ 產線待命中 (良率暫停)'}
                   </div>
                 </div>
               </div>

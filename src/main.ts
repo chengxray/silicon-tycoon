@@ -246,6 +246,12 @@ class FoundryGame {
           this.state.clawbackDebt = payout.remainingDebt;
           this.state.player.popularity = Math.min(100, this.state.player.popularity + 1);
 
+          // 累計研發晉升指標：已交付訂單數與晶圓片數
+          const orderLots = this.state.activeLots.filter((l) => l.orderId === order.id);
+          const orderWafers = orderLots.reduce((sum, l) => sum + (l.waferCount || 25), 0) || 25;
+          this.state.player.totalOrdersFulfilled = (this.state.player.totalOrdersFulfilled || 0) + 1;
+          this.state.player.totalWafersDelivered = (this.state.player.totalWafersDelivered || 0) + orderWafers;
+
           QuestEngine.onOrderFulfilled(this.state.questState);
 
           // 移除已出貨訂單與批次

@@ -52,7 +52,10 @@ export class SaveGameService {
         foundryTier: 1,
         popularity: 100,
         unlockedK1: 'BASE',
-        unlockedCleanroomClass: 'Class 10000'
+        unlockedCleanroomClass: 'Class 10000',
+        totalOrdersFulfilled: 0,
+        totalWafersDelivered: 0,
+        rdInvestedCash: 0
       },
       unlockedFeatures: {
         cmp: false,
@@ -413,6 +416,11 @@ export class SaveGameService {
           }
           parsed.userId = activeUser.id;
           parsed.financialState = FinanceEngine.ensureFinancialState(parsed);
+          if (parsed.player) {
+            if (parsed.player.totalOrdersFulfilled === undefined) parsed.player.totalOrdersFulfilled = 0;
+            if (parsed.player.totalWafersDelivered === undefined) parsed.player.totalWafersDelivered = 0;
+            if (parsed.player.rdInvestedCash === undefined) parsed.player.rdInvestedCash = 0;
+          }
           return parsed as SaveGameV2;
         }
       }

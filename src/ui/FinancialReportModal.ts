@@ -30,18 +30,19 @@ export class FinancialReportModal {
     let currentRecord: FinancialRecord = fin.today;
     let historyList: FinancialRecord[] = fin.dailyHistory;
     let tabTitle = '日收支分析';
-    let periodDesc = `本日進度: ${fin.daySeconds} / ${FinanceEngine.DAY_SECONDS} 秒 (第 ${fin.currentDay} 天)`;
+    const todayStr = fin.currentDateStr || FinanceEngine.getTodayDateString();
+    let periodDesc = `現實同步: 📅 ${todayStr} (今日進行中)`;
 
     if (this.activeTab === 'WEEK') {
       currentRecord = fin.thisWeek;
       historyList = fin.weeklyHistory;
       tabTitle = '周收支分析';
-      periodDesc = `本周累計: 第 ${fin.currentWeek} 周 (每 7 天結算一次)`;
+      periodDesc = `現實同步: 📅 本周累計 (${FinanceEngine.getWeekString()})`;
     } else if (this.activeTab === 'MONTH') {
       currentRecord = fin.thisMonth;
       historyList = fin.monthlyHistory;
       tabTitle = '月收支分析';
-      periodDesc = `本月累計: 第 ${fin.currentMonth} 個月 (每 28 天結算一次)`;
+      periodDesc = `現實同步: 📅 本月累計 (${FinanceEngine.getMonthString()})`;
     }
 
     const cfoAdvice = FinanceEngine.generateCFOAdvisory(currentRecord, state);

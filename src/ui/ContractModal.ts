@@ -492,6 +492,12 @@ export class ContractModal {
         FinanceEngine.recordWaferSales(state, payout.netPayout);
         state.clawbackDebt = payout.remainingDebt;
 
+        // 累計研發晉升指標：已交付訂單數與晶圓片數
+        const orderLots = state.activeLots.filter(l => l.orderId === order.id);
+        const orderWafers = orderLots.reduce((sum, l) => sum + (l.waferCount || 25), 0) || 25;
+        state.player.totalOrdersFulfilled = (state.player.totalOrdersFulfilled || 0) + 1;
+        state.player.totalWafersDelivered = (state.player.totalWafersDelivered || 0) + orderWafers;
+
         // 移除完工訂單與相關 lots
         state.activeOrders.splice(orderIndex, 1);
         state.activeLots = state.activeLots.filter(l => l.orderId !== order.id);

@@ -18,6 +18,7 @@ import { LayerAllocationModal } from './LayerAllocationModal';
 import { TutorialOverlay } from './TutorialOverlay';
 import { FinancialReportModal } from './FinancialReportModal';
 import { UserLoginModal } from './UserLoginModal';
+import { TechTreeModal } from './TechTreeModal';
 import { SaveGameService } from '../services/SaveGameService';
 import { SoundEffects } from '../audio/SoundEffects';
 import { OrderData, WaferLotData } from '../types';
@@ -57,7 +58,8 @@ export class UIManager {
       onOpenTutorial: () => this.openTutorial(),
       onOpenFinance: () => this.openFinancialReport(),
       onOpenLogin: () => this.openUserLogin(),
-      onOpenPlanner: () => this.togglePlannerMode()
+      onOpenPlanner: () => this.togglePlannerMode(),
+      onOpenTechTree: () => this.openTechTree()
     });
 
     // 初始化 Dev Console 監聽器
@@ -439,6 +441,13 @@ export class UIManager {
 
   public openFinancialReport(): void {
     FinancialReportModal.show(this.state, () => {
+      this.render();
+      this.onStateUpdated();
+    });
+  }
+
+  public openTechTree(): void {
+    TechTreeModal.show(this.state, () => {
       this.render();
       this.onStateUpdated();
     });

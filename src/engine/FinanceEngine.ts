@@ -11,9 +11,44 @@
 import { SaveGameV2, FinancialState, FinancialRecord } from '../types';
 
 export class FinanceEngine {
-  public static readonly DAY_SECONDS = 30; // 30 遊戲秒 = 1 遊戲日
-  public static readonly DAYS_PER_WEEK = 7; // 7 遊戲日 = 1 遊戲周 (210 秒)
-  public static readonly DAYS_PER_MONTH = 28; // 28 遊戲日 = 1 遊戲月 (840 秒)
+  public static readonly DAY_SECONDS = 86400; // 現實世界 1 天 = 86400 秒
+  public static readonly DAYS_PER_WEEK = 7;
+  public static readonly DAYS_PER_MONTH = 30;
+
+  /**
+   * 取得本地現實年月日字串 (YYYY-MM-DD)
+   */
+  public static getTodayDateString(d: Date = new Date()): string {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  /**
+   * 取得 ISO 格式周別字串 (例：2026-W37)
+   */
+  public static getWeekString(d: Date = new Date()): string {
+    const target = new Date(d.valueOf());
+    const dayNr = (d.getDay() + 6) % 7;
+    target.setDate(target.getDate() - dayNr + 3);
+    const firstThursday = target.valueOf();
+    target.setMonth(0, 1);
+    if (target.getDay() !== 4) {
+      target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+    }
+    const weekNumber = 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
+    return `${target.getFullYear()}-W${String(weekNumber).padStart(2, '0')}`;
+  }
+
+  /**
+   * 取得月份字串 (例：2026-09)
+   */
+  public static getMonthString(d: Date = new Date()): string {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+  }
 
   /**
    * 建立空白週期紀錄
@@ -55,17 +90,19 @@ export class FinanceEngine {
   }
 
   /**
-   * 初始化財務狀態
+   * 初始化財務狀態（完全與現實世界日曆同步）
    */
   public static initFinancialState(initialCash: number = 50_000_000, initialNetWorth: number = 70_000_000): FinancialState {
+    const todayStr = this.getTodayDateString();
     return {
       daySeconds: 0,
       currentDay: 1,
       currentWeek: 1,
       currentMonth: 1,
-      today: this.createEmptyRecord('DAY', 1, '第 1 天 (Day 1)', initialCash, initialNetWorth),
-      thisWeek: this.createEmptyRecord('WEEK', 1, '第 1 周 (Week 1)', initialCash, initialNetWorth),
-      thisMonth: this.createEmptyRecord('MONTH', 1, '第 1 個月 (Month 1)', initialCash, initialNetWorth),
+      currentDateStr: todayStr,
+      today: this.createEmptyRecord('DAY', 1, `📅 ${todayStr} (今日)`, initialCash, initialNetWorth),
+      thisWeek: this.createEmptyRecord('WEEK', 1, `📅 本周 (${this.getWeekString()})`, initialCash, initialNetWorth),
+      thisMonth: this.createEmptyRecord('MONTH', 1, `📅 本月 (${this.getMonthString()})`, initialCash, initialNetWorth),
       dailyHistory: [],
       weeklyHistory: [],
       monthlyHistory: [],
@@ -224,19 +261,29 @@ export class FinanceEngine {
     this.updateRecordTotals(fin.thisWeek, state);
     this.updateRecordTotals(fin.thisMonth, state);
 
-    // 4. 推進每日計時
-    fin.daySeconds += deltaSeconds;
-    if (fin.daySeconds >= this.DAY_SECONDS) {
-      this.closeDay(state);
+    // 4. 現實世界日曆同步檢測 (推進真實年月日、換日、換周、換月)
+    const todayStr = this.getTodayDateString();
+    if (!fin.currentDateStr) {
+      fin.currentDateStr = todayStr;
+    }
+
+    if (fin.currentDateStr !== todayStr) {
+      const prevDate = fin.currentDateStr;
+      fin.currentDateStr = todayStr;
+      this.closeDay(state, prevDate, todayStr);
     }
   }
 
   /**
-   * 換日結算 (Close Day)
+   * 換日結算 (Close Day - 與現實日曆同步推進)
    */
-  public static closeDay(state: SaveGameV2): void {
+  public static closeDay(state: SaveGameV2, prevDateStr?: string, nextDateStr?: string): void {
     const fin = this.ensureFinancialState(state);
     this.updateRecordTotals(fin.today, state);
+
+    if (prevDateStr) {
+      fin.today.label = `📅 ${prevDateStr} (結算)`;
+    }
 
     // 存入日報歷史 (保留近 14 天)
     fin.dailyHistory.unshift(JSON.parse(JSON.stringify(fin.today)));
@@ -247,29 +294,33 @@ export class FinanceEngine {
     fin.daySeconds = 0;
     fin.currentDay += 1;
 
+    const actualDate = nextDateStr || this.getTodayDateString();
+    fin.currentDateStr = actualDate;
+
     // 開啟全新的一日
-    const nextDay = fin.currentDay;
     fin.today = this.createEmptyRecord(
       'DAY',
-      nextDay,
-      `第 ${nextDay} 天 (Day ${nextDay})`,
+      fin.currentDay,
+      `📅 ${actualDate} (今日)`,
       state.player.cash,
       this.calculateCompanyNetWorth(state)
     );
 
-    // 檢查是否跨周 (每 7 天換周)
-    if (nextDay % this.DAYS_PER_WEEK === 1 && nextDay > 1) {
+    // 檢查現實世界是否換周
+    const prevDateObj = prevDateStr ? new Date(prevDateStr) : new Date(Date.now() - 86400000);
+    const newDateObj = new Date(actualDate);
+    if (this.getWeekString(prevDateObj) !== this.getWeekString(newDateObj)) {
       this.closeWeek(state);
     }
 
-    // 檢查是否跨月 (每 28 天換月)
-    if (nextDay % this.DAYS_PER_MONTH === 1 && nextDay > 1) {
+    // 檢查現實世界是否換月
+    if (this.getMonthString(prevDateObj) !== this.getMonthString(newDateObj)) {
       this.closeMonth(state);
     }
   }
 
   /**
-   * 換周結算 (Close Week)
+   * 換周結算 (Close Week - 與現實周曆同步)
    */
   public static closeWeek(state: SaveGameV2): void {
     const fin = this.ensureFinancialState(state);
@@ -286,14 +337,14 @@ export class FinanceEngine {
     fin.thisWeek = this.createEmptyRecord(
       'WEEK',
       nextWeek,
-      `第 ${nextWeek} 周 (Week ${nextWeek})`,
+      `📅 本周 (${this.getWeekString()})`,
       state.player.cash,
       this.calculateCompanyNetWorth(state)
     );
   }
 
   /**
-   * 換月結算 (Close Month)
+   * 換月結算 (Close Month - 與現實月份同步)
    */
   public static closeMonth(state: SaveGameV2): void {
     const fin = this.ensureFinancialState(state);
@@ -310,7 +361,7 @@ export class FinanceEngine {
     fin.thisMonth = this.createEmptyRecord(
       'MONTH',
       nextMonth,
-      `第 ${nextMonth} 個月 (Month ${nextMonth})`,
+      `📅 本月 (${this.getMonthString()})`,
       state.player.cash,
       this.calculateCompanyNetWorth(state)
     );
@@ -321,16 +372,15 @@ export class FinanceEngine {
    */
   private static updateRecordTotals(r: FinancialRecord, state: SaveGameV2): void {
     r.revenue.totalRevenue = r.revenue.waferSales + r.revenue.nreFees + r.revenue.subsidies;
-    r.expenses.totalExpenses = (
+    r.expenses.totalExpenses =
       r.expenses.depreciation +
       r.expenses.maintenance +
       r.expenses.utilities +
       r.expenses.payroll +
       r.expenses.scraps +
-      r.expenses.capex
-    );
+      r.expenses.capex;
 
-    // 營業成本 COGS = 折舊 + 維修 + 水電 + 報廢
+    // 營業毛利 = 總營收 - (折舊 + 維修 + 水電化學耗能 + 報廢損失)
     const cogs = r.expenses.depreciation + r.expenses.maintenance + r.expenses.utilities + r.expenses.scraps;
     r.grossProfit = r.revenue.totalRevenue - cogs;
     r.grossMarginPct = r.revenue.totalRevenue > 0
@@ -354,6 +404,9 @@ export class FinanceEngine {
   public static ensureFinancialState(state: SaveGameV2): FinancialState {
     if (!state.financialState || !state.financialState.today) {
       state.financialState = this.initFinancialState(state.player.cash, this.calculateCompanyNetWorth(state));
+    }
+    if (!state.financialState.currentDateStr) {
+      state.financialState.currentDateStr = this.getTodayDateString();
     }
     return state.financialState;
   }

@@ -11,6 +11,7 @@ import { ASSET_REGISTRY } from '../services/AssetRegistry';
 import { SoundEffects } from '../audio/SoundEffects';
 import { AchievementEngine } from '../engine/AchievementEngine';
 import { FinanceEngine } from '../engine/FinanceEngine';
+import { TechTreeModal } from './TechTreeModal';
 
 export interface StoreEquipmentItem {
   modelId: string;
@@ -445,17 +446,24 @@ export class StoreModal {
                   <span>原理</span>
                 </button>
 
-                <button
-                  class="btn-buy-equipment flex-1 btn-sci-fi justify-center text-xs py-2 ${(!isUnlocked || !canAfford || isCmpLocked) ? 'opacity-50 cursor-not-allowed' : ''}"
-                  data-model-id="${item.modelId}"
-                  ${(!isUnlocked || !canAfford || isCmpLocked) ? 'disabled' : ''}
-                >
-                  ${!isUnlocked
-                    ? `🔒 需達到 Tier ${item.tier}`
-                    : (isCmpLocked
+                ${!isUnlocked ? `
+                  <button
+                    class="btn-open-techtree-from-store flex-1 btn-sci-fi justify-center text-xs py-2 bg-amber-950/40 border-amber-500/50 text-amber-300 hover:text-white"
+                    title="點擊前往科技樹查看研發解鎖條件"
+                  >
+                    🔒 需達到 Tier ${item.tier} (前往研發)
+                  </button>
+                ` : `
+                  <button
+                    class="btn-buy-equipment flex-1 btn-sci-fi justify-center text-xs py-2 ${(!canAfford || isCmpLocked) ? 'opacity-50 cursor-not-allowed' : ''}"
+                    data-model-id="${item.modelId}"
+                    ${(!canAfford || isCmpLocked) ? 'disabled' : ''}
+                  >
+                    ${isCmpLocked
                       ? '🔒 CMP 科技未解鎖'
-                      : (!canAfford ? '資金不足' : '🛒 採購並安裝至廠房'))}
-                </button>
+                      : (!canAfford ? '資金不足' : '🛒 採購並安裝至廠房')}
+                  </button>
+                `}
               </div>
 
             </div>
@@ -598,6 +606,17 @@ export class StoreModal {
         if (!item) return;
 
         alert(`👨‍🏫 半導體晶圓教室：【${item.name}】\n\n${item.scienceNote}`);
+      });
+    });
+
+    // 點選未解鎖世代機台前往研發科技樹
+    container.querySelectorAll('.btn-open-techtree-from-store').forEach(btn => {
+      btn.addEventListener('click', () => {
+        SoundEffects.playClick();
+        container.innerHTML = '';
+        TechTreeModal.show(state, () => {
+          onUpdate();
+        });
       });
     });
 
