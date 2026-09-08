@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <rect width="800" height="600" fill="#0f172a"/>
+  <!-- 1990s Perforated Raised Floor Pattern -->
+  <defs>
+    <pattern id="grid90s" width="50" height="50" patternUnits="userSpaceOnUse">
+      <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#1e293b" stroke-width="1.5"/>
+      <circle cx="25" cy="25" r="3" fill="#334155"/>
+    </pattern>
+  </defs>
+  <rect width="800" height="600" fill="url(#grid90s)"/>
+  <rect x="50" y="50" width="700" height="100" rx="8" fill="#d97706" opacity="0.15"/>
+  <text x="400" y="105" fill="#f59e0b" font-size="24" font-weight="bold" text-anchor="middle" font-family="sans-serif">Cleanroom Tier 2~3 (1990s Sub-micron Fab)</text>
+  <text x="400" y="130" fill="#cbd5e1" font-size="14" text-anchor="middle" font-family="sans-serif">Class 10,000 ~ Class 1,000 | 鋼製高架通風格柵地板 | 琥珀黃光微影區光暈</text>
+</svg>

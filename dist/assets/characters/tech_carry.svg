@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 128" width="512" height="128">
+  <rect width="512" height="128" fill="#090d16" stroke="#0ea5e9" stroke-width="2"/>
+  <line x1="128" y1="0" x2="128" y2="128" stroke="#334155" stroke-dasharray="4"/>
+  <line x1="256" y1="0" x2="256" y2="128" stroke="#334155" stroke-dasharray="4"/>
+  <line x1="384" y1="0" x2="384" y2="128" stroke="#334155" stroke-dasharray="4"/>
+  <text x="64" y="68" fill="#38bdf8" font-size="14" font-weight="bold" text-anchor="middle" font-family="sans-serif">Carry 1</text>
+  <text x="192" y="68" fill="#38bdf8" font-size="14" font-weight="bold" text-anchor="middle" font-family="sans-serif">Carry 2</text>
+  <text x="320" y="68" fill="#38bdf8" font-size="14" font-weight="bold" text-anchor="middle" font-family="sans-serif">Carry 3</text>
+  <text x="448" y="68" fill="#38bdf8" font-size="14" font-weight="bold" text-anchor="middle" font-family="sans-serif">Carry 4</text>
+  <text x="256" y="110" fill="#94a3b8" font-size="11" text-anchor="middle" font-family="sans-serif">【無塵衣技術員：雙手端晶圓卡匣行走 Sprite Sheet】</text>
+</svg>

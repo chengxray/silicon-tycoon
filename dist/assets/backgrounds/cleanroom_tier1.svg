@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <rect width="800" height="600" fill="#1e293b"/>
+  <!-- 1970s Retro Lab Floor Pattern -->
+  <defs>
+    <pattern id="grid70s" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#334155" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="800" height="600" fill="url(#grid70s)"/>
+  <rect x="50" y="50" width="700" height="100" rx="8" fill="#f59e0b" opacity="0.1"/>
+  <text x="400" y="105" fill="#fbbf24" font-size="24" font-weight="bold" text-anchor="middle" font-family="sans-serif">Cleanroom Tier 1 (1970s~1980s Retro Lab)</text>
+  <text x="400" y="130" fill="#94a3b8" font-size="14" text-anchor="middle" font-family="sans-serif">Class 100,000 | 手工裝配台 | 早期水磨石地坪 | 局部黃光罩</text>
+</svg>

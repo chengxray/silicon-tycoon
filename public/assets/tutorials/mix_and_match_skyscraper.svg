@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" width="600" height="400">
+  <rect width="600" height="400" rx="16" fill="#0b1329" stroke="#f59e0b" stroke-width="2"/>
+  <text x="300" y="45" fill="#f59e0b" font-size="18" font-weight="bold" text-anchor="middle" font-family="sans-serif">【混合微影分層匹配 (Mix-and-Match) 摩天大樓比喻】</text>
+
+  <!-- Skyscraper Layer 4: Top Metal / Pad (Non-critical) -->
+  <rect x="100" y="80" width="400" height="45" rx="6" fill="#1e293b" stroke="#eab308" stroke-width="2"/>
+  <text x="120" y="108" fill="#fde047" font-size="13" font-weight="bold" font-family="sans-serif">頂層鈍化防護與銲墊 (Pad)</text>
+  <text x="470" y="108" fill="#cbd5e1" font-size="11" text-anchor="end" font-family="sans-serif">【G-Line / I-Line】超速完成 ⚡</text>
+
+  <!-- Skyscraper Layer 3: Intermediate Metal (Semi-critical) -->
+  <rect x="100" y="135" width="400" height="45" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+  <text x="120" y="163" fill="#7dd3fc" font-size="13" font-weight="bold" font-family="sans-serif">中段金屬互連線 (Metal 2~5)</text>
+  <text x="470" y="163" fill="#cbd5e1" font-size="11" text-anchor="end" font-family="sans-serif">【KrF / ArF Dry】經濟高效 🟢</text>
+
+  <!-- Skyscraper Layer 2: Contact / Via (Semi-critical) -->
+  <rect x="100" y="190" width="400" height="45" rx="6" fill="#1e293b" stroke="#818cf8" stroke-width="2"/>
+  <text x="120" y="218" fill="#a5b4fc" font-size="13" font-weight="bold" font-family="sans-serif">接觸窗與第一層金屬 (Via / M1)</text>
+  <text x="470" y="218" fill="#cbd5e1" font-size="11" text-anchor="end" font-family="sans-serif">【ArFi Immersion】精密對準 🟢</text>
+
+  <!-- Skyscraper Layer 1: Transistor Gate (Critical Foundation) -->
+  <rect x="100" y="245" width="400" height="55" rx="6" fill="#1e1b4b" stroke="#c084fc" stroke-width="3"/>
+  <text x="120" y="278" fill="#f0abfc" font-size="14" font-weight="bold" font-family="sans-serif">地基：電晶體核心閘極 (Critical Gate)</text>
+  <text x="470" y="278" fill="#e879f9" font-size="12" font-weight="bold" text-anchor="end" font-family="sans-serif">【EUV / High-NA】極限解析 🏆</text>
+
+  <rect x="100" y="320" width="400" height="45" rx="6" fill="#0f172a"/>
+  <text x="300" y="348" fill="#94a3b8" font-size="12" text-anchor="middle" font-family="sans-serif">💡 關鍵層用頂級光刻機，非關鍵層用成熟機台，兼顧良率與生產效率！</text>
+</svg>

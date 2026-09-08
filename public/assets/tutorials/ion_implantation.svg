@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" width="600" height="400">
+  <rect width="600" height="400" rx="16" fill="#0b1329" stroke="#ec4899" stroke-width="2"/>
+  <text x="300" y="45" fill="#f472b6" font-size="18" font-weight="bold" text-anchor="middle" font-family="sans-serif">【離子佈植 (Ion Implantation) 與雜質摻雜】</text>
+
+  <rect x="50" y="80" width="500" height="230" rx="8" fill="#1e293b" stroke="#334155"/>
+  <!-- Silicon Lattice -->
+  <rect x="80" y="160" width="440" height="120" fill="#0f172a" stroke="#475569"/>
+  <text x="300" y="270" fill="#64748b" font-size="12" text-anchor="middle" font-family="sans-serif">純矽晶圓晶格 (Silicon Crystal Substrate)</text>
+
+  <!-- High Energy Ions -->
+  <line x1="200" y1="100" x2="200" y2="190" stroke="#ec4899" stroke-width="3"/>
+  <line x1="250" y1="100" x2="250" y2="200" stroke="#ec4899" stroke-width="3"/>
+  <line x1="300" y1="100" x2="300" y2="185" stroke="#ec4899" stroke-width="3"/>
+  <line x1="350" y1="100" x2="350" y2="195" stroke="#ec4899" stroke-width="3"/>
+
+  <!-- Doped Region -->
+  <rect x="180" y="160" width="200" height="50" fill="#ec4899" opacity="0.3"/>
+  <text x="280" y="185" fill="#fbcfe8" font-size="11" font-weight="bold" text-anchor="middle" font-family="sans-serif">摻雜區 (P-Well / N-Well)</text>
+
+  <text x="300" y="340" fill="#cbd5e1" font-size="12" text-anchor="middle" font-family="sans-serif">高能離子加速器將硼 (B) 或磷 (P) 原子高速轟入晶格，形成導電源極與汲極</text>
+  <text x="300" y="370" fill="#94a3b8" font-size="12" text-anchor="middle" font-family="sans-serif">半導體科普圖鑑 05：電晶體核心導電開關之誕生</text>
+</svg>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 128" width="512" height="128">
+  <rect width="512" height="128" fill="#090d16" stroke="#38bdf8" stroke-width="2"/>
+  <line x1="128" y1="0" x2="128" y2="128" stroke="#334155" stroke-dasharray="4"/>
+  <line x1="256" y1="0" x2="256" y2="128" stroke="#334155" stroke-dasharray="4"/>
+  <line x1="384" y1="0" x2="384" y2="128" stroke="#334155" stroke-dasharray="4"/>
+  <text x="64" y="68" fill="#7dd3fc" font-size="14" font-weight="bold" text-anchor="middle" font-family="sans-serif">OHT Glide</text>
+  <text x="192" y="68" fill="#7dd3fc" font-size="14" font-weight="bold" text-anchor="middle" font-family="sans-serif">OHT Hoist</text>
+  <text x="320" y="68" fill="#ef4444" font-size="14" font-weight="bold" text-anchor="middle" font-family="sans-serif">SHR Siren</text>
+  <text x="448" y="68" fill="#7dd3fc" font-size="14" font-weight="bold" text-anchor="middle" font-family="sans-serif">OHT Siding</text>
+  <text x="256" y="110" fill="#94a3b8" font-size="11" text-anchor="middle" font-family="sans-serif">【天花板 OHT 天車：滑行/吊掛FOUP/SHR超急件 Sprite Sheet】</text>
+</svg>

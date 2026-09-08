@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <rect width="800" height="600" fill="#090d16"/>
+  <!-- 2000s Automated 12-inch 300mm Fab Pattern -->
+  <defs>
+    <pattern id="gridModern" width="60" height="60" patternUnits="userSpaceOnUse">
+      <path d="M 60 0 L 0 0 0 60" fill="none" stroke="#1e293b" stroke-width="1"/>
+      <rect x="5" y="5" width="50" height="50" fill="#0f172a" rx="4"/>
+    </pattern>
+  </defs>
+  <rect width="800" height="600" fill="url(#gridModern)"/>
+  <rect x="50" y="50" width="700" height="100" rx="8" fill="#0284c7" opacity="0.15"/>
+  <text x="400" y="105" fill="#38bdf8" font-size="24" font-weight="bold" text-anchor="middle" font-family="sans-serif">Cleanroom Tier 4~5 (Modern 300mm Automated Fab)</text>
+  <text x="400" y="130" fill="#cbd5e1" font-size="14" text-anchor="middle" font-family="sans-serif">Class 100 | 天花板 OHT 懸吊天軌天車網絡 | 鏡面抗靜電環氧地板</text>
+</svg>

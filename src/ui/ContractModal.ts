@@ -1,0 +1,506 @@
+/**
+ * ContractModal.ts
+ * 負責合約看板與在製訂單追蹤：
+ * 1. 承接 IC 設計公司市場代工訂單，即刻領取 NRE 光罩研發預付款，投入產線排程
+ * 2. 監控在製晶圓批次 (Wafer Lots) 之加工站點、Q-Time 死線與出貨結算
+ */
+
+import { SaveGameV2, OrderData, WaferLotData } from '../types';
+import { EconomyEngine } from '../engine/EconomyEngine';
+import { SoundEffects } from '../audio/SoundEffects';
+import { RayleighEngine } from '../engine/RayleighEngine';
+import { AchievementEngine } from '../engine/AchievementEngine';
+import { WaferMapModal } from './WaferMapModal';
+import { LayerAllocationModal } from './LayerAllocationModal';
+
+export class ContractModal {
+  private static marketOrders: OrderData[] = [];
+  private static lastRefreshTime = 0;
+  private static currentTab: 'MARKET' | 'ACTIVE' = 'MARKET';
+
+  public static show(state: SaveGameV2, onUpdate: () => void): void {
+    const container = document.getElementById('modal-container');
+    if (!container) return;
+
+    // 若市場訂單為空或已超過 60 秒，自動刷新
+    if (this.marketOrders.length === 0 || state.gameTime - this.lastRefreshTime > 60) {
+      this.refreshMarketOrders(state);
+    }
+
+    this.render(container, state, onUpdate);
+  }
+
+  private static refreshMarketOrders(state: SaveGameV2): void {
+    const rollingYield = state.rollingYieldHistory.length > 0
+      ? state.rollingYieldHistory.reduce((a, b) => a + b, 0) / state.rollingYieldHistory.length
+      : null;
+    this.marketOrders = EconomyEngine.generateContractBoard(
+      state.player.foundryTier,
+      rollingYield,
+      state.gameTime
+    );
+    this.lastRefreshTime = state.gameTime;
+  }
+
+  private static render(
+    container: HTMLElement,
+    state: SaveGameV2,
+    onUpdate: () => void
+  ): void {
+    const rollingYield = state.rollingYieldHistory.length > 0
+      ? state.rollingYieldHistory.reduce((a, b) => a + b, 0) / state.rollingYieldHistory.length
+      : null;
+    const trustMultiplier = EconomyEngine.calculateTrustMultiplier(rollingYield);
+
+    // 計算廠內最高解析度之微影機極限 CD (防呆檢查)
+    const bestLithoCD = this.getBestLithoCD(state);
+
+    container.innerHTML = `
+      <div class="modal-backdrop">
+        <div class="modal-content glass-panel glass-panel-glow max-w-4xl max-h-[90vh] flex flex-col text-slate-100 p-0 overflow-hidden">
+          
+          <!-- Header -->
+          <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700/80 bg-slate-900/60">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-xl">
+                📋
+              </div>
+              <div>
+                <h3 class="text-lg font-bold text-white tracking-wide flex items-center gap-2">
+                  <span>晶圓代工合約與光罩廠</span>
+                  <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-mono border border-cyan-500/30">
+                    Tier ${state.player.foundryTier}
+                  </span>
+                </h3>
+                <p class="text-xs text-slate-400">
+                  承接全球客戶晶片訂單，即刻領取 NRE 光罩研發預付款，投入潔淨室量產！
+                </p>
+              </div>
+            </div>
+
+            <!-- Trust Indicator -->
+            <div class="flex items-center gap-4">
+              <div class="text-right hidden sm:block">
+                <div class="text-[10px] text-slate-400 uppercase tracking-wider">客戶信任溢價</div>
+                <div class="text-sm font-mono font-bold ${trustMultiplier >= 1.0 ? 'text-emerald-400' : 'text-amber-400'}">
+                  ${trustMultiplier.toFixed(2)}x
+                  <span class="text-[10px] text-slate-400">(${rollingYield !== null ? (rollingYield * 100).toFixed(1) + '%' : 'N/A'})</span>
+                </div>
+              </div>
+              <button id="btn-close-contract" class="w-8 h-8 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center font-mono text-base transition-colors">
+                ✕
+              </button>
+            </div>
+          </div>
+
+          <!-- Tabs -->
+          <div class="flex border-b border-slate-700/60 bg-slate-900/30 px-6 pt-2">
+            <button id="tab-market" class="px-4 py-2.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 ${this.currentTab === 'MARKET' ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400 hover:text-slate-200'}">
+              <span>🌐 承接市場訂單池</span>
+              <span class="px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] font-mono">${this.marketOrders.length}</span>
+            </button>
+            <button id="tab-active" class="px-4 py-2.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 ${this.currentTab === 'ACTIVE' ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400 hover:text-slate-200'}">
+              <span>⚡ 在製訂單與批次</span>
+              <span class="px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] font-mono text-cyan-400">${state.activeOrders.length}</span>
+            </button>
+            <div class="ml-auto py-1.5 flex items-center">
+              ${this.currentTab === 'MARKET' ? `
+                <button id="btn-refresh-market" class="btn-sci-fi text-[11px] py-1 px-3">
+                  🔄 刷新訂單池
+                </button>
+              ` : ''}
+            </div>
+          </div>
+
+          <!-- Body -->
+          <div class="p-6 overflow-y-auto flex-1 space-y-4">
+            ${this.currentTab === 'MARKET'
+              ? this.renderMarketOrders(state, bestLithoCD)
+              : this.renderActiveOrders(state)
+            }
+          </div>
+
+        </div>
+      </div>
+    `;
+
+    this.bindEvents(container, state, onUpdate);
+  }
+
+  private static renderMarketOrders(state: SaveGameV2, bestLithoCD: number): string {
+    if (this.marketOrders.length === 0) {
+      return `
+        <div class="text-center py-12 text-slate-400">
+          <div class="text-4xl mb-2">📭</div>
+          <p class="text-sm">目前市場暫無新合約，請點擊上方按鈕刷新合約板！</p>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        ${this.marketOrders.map((order, idx) => {
+          const isLithoCapable = bestLithoCD <= order.nodeNm;
+          const nodeStr = order.nodeNm >= 1000
+            ? `${order.nodeNm / 1000} µm`
+            : `${order.nodeNm} nm`;
+
+          let urgencyBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-300">常規件 (1.0x)</span>`;
+          if (order.urgencyMultiplier === 1.2) {
+            urgencyBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">🟡 急件 (1.2x)</span>`;
+          } else if (order.urgencyMultiplier >= 1.5) {
+            urgencyBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-red-500/20 text-red-300 border border-red-500/30 animate-pulse">🔴 SHR 超急件 (1.5x)</span>`;
+          }
+
+          const estTotalPayout = order.nrePaid + order.totalDies * order.unitPrice;
+
+          return `
+            <div class="p-4 rounded-xl bg-slate-900/80 border ${isLithoCapable ? 'border-slate-800 hover:border-cyan-500/40' : 'border-red-900/40 bg-red-950/10'} transition-all flex flex-col justify-between space-y-3">
+              <!-- Card Header -->
+              <div class="flex items-start justify-between">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold text-white text-sm">${order.clientName}</span>
+                    ${urgencyBadge}
+                  </div>
+                  <div class="text-xs text-slate-400 mt-0.5 font-mono">
+                    合約編號: ${order.id}
+                  </div>
+                </div>
+                <div class="text-right">
+                  <div class="text-sm font-bold font-mono text-cyan-300">${nodeStr}</div>
+                  <div class="text-[10px] text-slate-400">${order.layerCount} 道光罩層</div>
+                </div>
+              </div>
+
+              <!-- Card Specs -->
+              <div class="grid grid-cols-2 gap-2 p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80 text-xs">
+                <div>
+                  <div class="text-[10px] text-slate-400">總晶粒需求</div>
+                  <div class="font-mono font-semibold text-slate-200">${order.totalDies.toLocaleString()} 顆</div>
+                </div>
+                <div>
+                  <div class="text-[10px] text-slate-400">出貨單價</div>
+                  <div class="font-mono font-semibold text-emerald-400">NT$ ${order.unitPrice.toFixed(2)} /顆</div>
+                </div>
+                <div>
+                  <div class="text-[10px] text-slate-400">💰 接單即付 NRE</div>
+                  <div class="font-mono font-bold text-amber-300">+NT$ ${order.nrePaid.toLocaleString()}</div>
+                </div>
+                <div>
+                  <div class="text-[10px] text-slate-400">預估合約總值</div>
+                  <div class="font-mono font-semibold text-cyan-300">~NT$ ${Math.round(estTotalPayout).toLocaleString()}</div>
+                </div>
+              </div>
+
+              <!-- Litho CD warning or ready -->
+              ${!isLithoCapable ? `
+                <div class="p-2 rounded bg-red-900/20 border border-red-700/30 text-[11px] text-red-300 flex items-center gap-1.5">
+                  <span>⚠️</span>
+                  <span>廠內機台極限 CD (${bestLithoCD === 999999 ? '無微影機' : bestLithoCD + 'nm'}) 無法滿足 ${nodeStr} 製程需求！</span>
+                </div>
+              ` : `
+                <div class="text-[11px] text-slate-400 flex items-center gap-1">
+                  <span>⏱️ 交付時限:</span>
+                  <span class="font-mono text-slate-300">${Math.max(0, order.deadlineGameTime - state.gameTime)} 遊戲秒</span>
+                </div>
+              `}
+
+              <!-- Action Button -->
+              <button
+                class="btn-accept-order btn-sci-fi w-full justify-center ${!isLithoCapable ? 'opacity-50 cursor-not-allowed' : ''}"
+                data-index="${idx}"
+                ${!isLithoCapable ? 'disabled' : ''}
+              >
+                ✍️ 簽約接單 (即刻領取 NT$ ${order.nrePaid.toLocaleString()})
+              </button>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  private static renderActiveOrders(state: SaveGameV2): string {
+    if (state.activeOrders.length === 0) {
+      return `
+        <div class="text-center py-12 text-slate-400">
+          <div class="text-4xl mb-2">⚙️</div>
+          <p class="text-sm">目前產線無在製訂單，請前往「承接市場訂單池」簽約接單！</p>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="space-y-4">
+        ${state.activeOrders.map((order) => {
+          const remainingSec = Math.max(0, order.deadlineGameTime - state.gameTime);
+          const isOverdue = remainingSec === 0;
+          const relatedLots = state.activeLots.filter(l => l.orderId === order.id);
+          const progressPercent = Math.min(100, Math.round((order.goodDiesDelivered / order.totalDies) * 100));
+
+          return `
+            <div class="p-4 rounded-xl bg-slate-900/80 border ${isOverdue ? 'border-red-600/50' : 'border-slate-800'} space-y-3">
+              <div class="flex items-start justify-between">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold text-white">${order.clientName}</span>
+                    <span class="text-xs font-mono text-cyan-300">
+                      [${order.nodeNm >= 1000 ? order.nodeNm / 1000 + 'µm' : order.nodeNm + 'nm'}]
+                    </span>
+                    ${isOverdue ? '<span class="px-2 py-0.5 rounded bg-red-600 text-white text-[10px] font-bold animate-pulse">逾期追討中</span>' : ''}
+                  </div>
+                  <div class="text-xs text-slate-400 font-mono">訂單編號: ${order.id}</div>
+                </div>
+
+                <div class="text-right">
+                  <div class="text-xs ${isOverdue ? 'text-red-400 font-bold' : 'text-slate-400'}">
+                    ${isOverdue ? '⚠️ 已超時' : '剩餘時間: ' + remainingSec + ' 秒'}
+                  </div>
+                  <div class="text-xs font-mono text-emerald-400">
+                    單價: NT$ ${order.unitPrice.toFixed(2)}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Progress Bar -->
+              <div class="space-y-1">
+                <div class="flex justify-between text-xs text-slate-300 font-mono">
+                  <span>合格交付量: ${order.goodDiesDelivered} / ${order.totalDies} 顆</span>
+                  <span>${progressPercent}%</span>
+                </div>
+                <div class="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                  <div class="h-full bg-cyan-400 transition-all duration-300" style="width: ${progressPercent}%;"></div>
+                </div>
+              </div>
+
+              <!-- In-fab lots status -->
+              <div class="p-3 rounded-lg bg-slate-950/60 border border-slate-800 space-y-2">
+                <div class="text-[11px] font-semibold text-slate-400">無塵室在製晶圓盒 (Lots):</div>
+                ${relatedLots.length === 0 ? `
+                  <div class="text-xs text-slate-500 italic">所有晶圓盒已完工，正等待結算交付...</div>
+                ` : `
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    ${relatedLots.map(lot => {
+                      let stationBadge = `<span class="text-cyan-300 font-bold">${lot.currentStation}</span>`;
+                      if (lot.currentStation === 'LIT') {
+                        stationBadge = `<span class="text-amber-300 font-bold">LIT (${lot.litSubStep || 'COAT'})</span>`;
+                      }
+
+                      let qTimeNotice = '';
+                      if (lot.qTimeDeadline !== null) {
+                        const qRem = Math.max(0, lot.qTimeDeadline - state.gameTime);
+                        qTimeNotice = `<span class="text-[10px] font-mono ${qRem < 10 ? 'text-red-400 animate-pulse' : 'text-amber-400'}">⏳ Q-Time: ${qRem}s</span>`;
+                      }
+
+                      return `
+                        <div class="p-2 rounded bg-slate-900 border border-slate-800 text-xs flex items-center justify-between gap-2">
+                          <div>
+                            <div class="font-mono text-slate-300 font-semibold flex items-center gap-1.5">
+                              <span>${lot.lotId}</span>
+                              <button class="btn-inspect-lot text-[9px] px-1.5 py-0.5 rounded bg-cyan-950 hover:bg-cyan-800 text-cyan-300 border border-cyan-700/50 flex items-center gap-0.5 cursor-pointer" data-lot-id="${lot.lotId}" title="點擊檢視蒙地卡羅晶圓圖">
+                                <span>🔍</span><span>晶圓圖</span>
+                              </button>
+                            </div>
+                            <div class="text-[10px] text-slate-400">
+                              層數: ${lot.currentLayer}/${lot.totalLayers} | 站點: ${stationBadge}
+                            </div>
+                          </div>
+                          <div class="text-right">
+                            <div class="text-[10px] text-emerald-400 font-mono">良率: ${(lot.yieldMultiplier * 100).toFixed(0)}%</div>
+                            ${qTimeNotice}
+                          </div>
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+                `}
+              </div>
+
+              <!-- Actions -->
+              <div class="flex items-center justify-between gap-2 pt-1">
+                <div>
+                  ${order.layerCount > 1 ? `
+                    <button class="btn-layer-allocation btn-sci-fi text-xs py-1 px-3 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/50 text-indigo-300 flex items-center gap-1.5" data-order-id="${order.id}" title="自訂先進製程多層微影機台分配">
+                      <span>🎛️</span>
+                      <span>微影分層配方 (${order.layerAllocations?.length || order.layerCount}層)</span>
+                    </button>
+                  ` : ''}
+                </div>
+
+                <div class="flex items-center gap-2">
+                  ${relatedLots.length === 0 || relatedLots.every(l => l.status === 'COMPLETED') ? `
+                    <button class="btn-settle-order btn-sci-fi text-xs py-1.5 px-4 bg-emerald-600 hover:bg-emerald-500" data-order-id="${order.id}">
+                      📦 完成出貨結算尾款
+                    </button>
+                  ` : `
+                    <div class="text-[11px] text-slate-400 flex items-center gap-1">
+                      <span class="animate-spin">⚙️</span>
+                      <span>晶圓加工中，完工後自動出貨...</span>
+                    </div>
+                  `}
+                </div>
+              </div>
+
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  private static bindEvents(
+    container: HTMLElement,
+    state: SaveGameV2,
+    onUpdate: () => void
+  ): void {
+    // 關閉
+    document.getElementById('btn-close-contract')?.addEventListener('click', () => {
+      SoundEffects.playClick();
+      container.innerHTML = '';
+    });
+
+    // 分頁切換
+    document.getElementById('tab-market')?.addEventListener('click', () => {
+      SoundEffects.playClick();
+      this.currentTab = 'MARKET';
+      this.render(container, state, onUpdate);
+    });
+
+    document.getElementById('tab-active')?.addEventListener('click', () => {
+      SoundEffects.playClick();
+      this.currentTab = 'ACTIVE';
+      this.render(container, state, onUpdate);
+    });
+
+    // 刷新市場訂單
+    document.getElementById('btn-refresh-market')?.addEventListener('click', () => {
+      SoundEffects.playClick();
+      this.refreshMarketOrders(state);
+      this.render(container, state, onUpdate);
+    });
+
+    // 簽約接單
+    container.querySelectorAll('.btn-accept-order').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const index = parseInt((e.currentTarget as HTMLElement).getAttribute('data-index') || '0', 10);
+        const order = this.marketOrders[index];
+        if (!order) return;
+
+        // 接單音效
+        SoundEffects.playCoinChime();
+
+        // 1. 即刻發放 NRE 光罩研發款
+        state.player.cash += order.nrePaid;
+
+        // 2. 加入 activeOrders
+        state.activeOrders.push(order);
+
+        // 3. 建立對應的 WaferLotData 批次投入產線
+        const lotCount = Math.max(1, Math.min(3, Math.ceil(order.totalDies / 1000)));
+        for (let i = 0; i < lotCount; i++) {
+          const lot: WaferLotData = {
+            lotId: `LOT-${Date.now().toString(36).toUpperCase().slice(-4)}-${i + 1}`,
+            orderId: order.id,
+            waferCount: Math.ceil(order.totalDies / lotCount / (order.nodeNm >= 1000 ? 500 : 2000)),
+            currentStation: 'FILM',
+            currentLayer: 1,
+            totalLayers: order.layerCount,
+            qTimeDeadline: null,
+            yieldMultiplier: 1.0,
+            status: 'PROCESSING'
+          };
+          state.activeLots.push(lot);
+        }
+
+        // 4. 從市場池移除
+        this.marketOrders.splice(index, 1);
+
+        // 5. 檢核成就
+        AchievementEngine.checkAchievements(state);
+
+        onUpdate();
+        this.currentTab = 'ACTIVE';
+        this.render(container, state, onUpdate);
+      });
+    });
+
+    // 手動交付結算
+    container.querySelectorAll('.btn-settle-order').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const orderId = (e.currentTarget as HTMLElement).getAttribute('data-order-id');
+        const orderIndex = state.activeOrders.findIndex(o => o.id === orderId);
+        if (orderIndex === -1) return;
+
+        const order = state.activeOrders[orderIndex];
+        const goodDies = order.goodDiesDelivered > 0 ? order.goodDiesDelivered : order.totalDies * 0.95;
+
+        // 結算尾款與清償債務
+        const payout = EconomyEngine.settleOrderPayout(
+          order,
+          goodDies,
+          state.player,
+          state.staff,
+          0,
+          state.clawbackDebt
+        );
+
+        state.player.cash += payout.netPayout;
+        state.clawbackDebt = payout.remainingDebt;
+
+        // 移除完工訂單與相關 lots
+        state.activeOrders.splice(orderIndex, 1);
+        state.activeLots = state.activeLots.filter(l => l.orderId !== order.id);
+
+        SoundEffects.playFanfare();
+        AchievementEngine.checkAchievements(state);
+        onUpdate();
+        this.render(container, state, onUpdate);
+      });
+    });
+
+    // 點擊檢視單一批次蒙地卡羅晶圓圖
+    container.querySelectorAll('.btn-inspect-lot').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const lotId = (e.currentTarget as HTMLElement).getAttribute('data-lot-id');
+        const targetLot = state.activeLots.find(l => l.lotId === lotId);
+        SoundEffects.playClick();
+        WaferMapModal.show(state, targetLot, () => {
+          this.render(container, state, onUpdate);
+          onUpdate();
+        });
+      });
+    });
+
+    // 點擊開啟先進多層微影分層配方指派彈窗
+    container.querySelectorAll('.btn-layer-allocation').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const orderId = (e.currentTarget as HTMLElement).getAttribute('data-order-id');
+        const targetOrder = state.activeOrders.find(o => o.id === orderId);
+        if (!targetOrder) return;
+        SoundEffects.playClick();
+        LayerAllocationModal.show(state, targetOrder, () => {
+          this.render(container, state, onUpdate);
+          onUpdate();
+        });
+      });
+    });
+  }
+
+  /**
+   * 取得廠內現有機台最高解析度之極限 CD
+   */
+  private static getBestLithoCD(state: SaveGameV2): number {
+    const lithoMachines = state.machines.filter(m => m.category === 'LITHO' && m.status !== 'EXPLODED');
+    if (lithoMachines.length === 0) return 999999;
+
+    let minCD = 999999;
+    for (const m of lithoMachines) {
+      const spec = RayleighEngine.OPTICAL_CATALOG[m.modelId];
+      if (spec && spec.baseRayleighLimitNm < minCD) {
+        minCD = spec.baseRayleighLimitNm;
+      }
+    }
+    return minCD;
+  }
+}

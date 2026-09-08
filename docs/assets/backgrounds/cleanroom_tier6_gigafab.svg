@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <rect width="800" height="600" fill="#030712"/>
+  <!-- Futuristic Cyber Titanium GigaFab Pattern -->
+  <defs>
+    <pattern id="gridGiga" width="80" height="80" patternUnits="userSpaceOnUse">
+      <path d="M 80 0 L 0 0 0 80" fill="none" stroke="#111827" stroke-width="1.5"/>
+      <rect x="10" y="10" width="60" height="60" fill="#0b0f19" stroke="#1f2937" rx="6"/>
+      <circle cx="40" cy="40" r="4" fill="#8b5cf6" opacity="0.4"/>
+    </pattern>
+  </defs>
+  <rect width="800" height="600" fill="url(#gridGiga)"/>
+  <rect x="50" y="50" width="700" height="100" rx="8" fill="#7c3aed" opacity="0.2"/>
+  <text x="400" y="105" fill="#a855f7" font-size="24" font-weight="bold" text-anchor="middle" font-family="sans-serif">Cleanroom Tier 6 (GigaFab Super Foundry)</text>
+  <text x="400" y="130" fill="#e2e8f0" font-size="14" text-anchor="middle" font-family="sans-serif">ISO Class 1 | N2 Purge 充氮密封載具 | EUV 專屬超高真空隔離腔體</text>
+</svg>

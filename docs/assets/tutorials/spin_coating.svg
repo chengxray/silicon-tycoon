@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" width="600" height="400">
+  <rect width="600" height="400" rx="16" fill="#0b1329" stroke="#10b981" stroke-width="2"/>
+  <text x="300" y="45" fill="#10b981" font-size="18" font-weight="bold" text-anchor="middle" font-family="sans-serif">【光阻旋塗 (Spin Coating) 原理解析】</text>
+  <circle cx="200" cy="200" r="100" fill="#1e293b" stroke="#10b981" stroke-width="3"/>
+  <circle cx="200" cy="200" r="20" fill="#059669"/>
+  <!-- Spiral Lines for Centrifugal Force -->
+  <path d="M 200 180 Q 230 190 250 170 Q 280 140 270 110" fill="none" stroke="#34d399" stroke-width="3"/>
+  <path d="M 200 220 Q 170 210 150 230 Q 120 260 130 290" fill="none" stroke="#34d399" stroke-width="3"/>
+  <!-- Details -->
+  <text x="440" y="140" fill="#34d399" font-size="15" font-weight="bold" font-family="sans-serif">離心力薄膜鋪展</text>
+  <text x="440" y="175" fill="#cbd5e1" font-size="12" font-family="sans-serif">• 轉速：3,000 ~ 6,000 RPM</text>
+  <text x="440" y="205" fill="#cbd5e1" font-size="12" font-family="sans-serif">• 膜厚均勻度：&lt; 0.5 nm</text>
+  <text x="440" y="235" fill="#cbd5e1" font-size="12" font-family="sans-serif">• 邊緣去膠 (EBR)</text>
+  <text x="440" y="265" fill="#cbd5e1" font-size="12" font-family="sans-serif">• 軟烤 (PAB) 揮發 90% 溶劑</text>
+  <text x="300" y="360" fill="#94a3b8" font-size="12" text-anchor="middle" font-family="sans-serif">半導體科普圖鑑 02：Track 塗膠顯影物理機制</text>
+</svg>

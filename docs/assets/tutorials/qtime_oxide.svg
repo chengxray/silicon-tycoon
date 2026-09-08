@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" width="600" height="400">
+  <rect width="600" height="400" rx="16" fill="#0b1329" stroke="#ef4444" stroke-width="2"/>
+  <text x="300" y="45" fill="#f87171" font-size="18" font-weight="bold" text-anchor="middle" font-family="sans-serif">【Q-Time 物理化學死線危機】</text>
+
+  <!-- Hazard 1: AMC Amine Contamination -->
+  <rect x="40" y="80" width="240" height="230" rx="8" fill="#450a0a" stroke="#ef4444"/>
+  <text x="160" y="110" fill="#fca5a5" font-size="14" font-weight="bold" text-anchor="middle" font-family="sans-serif">LITHO → ETCH 危機</text>
+  <rect x="70" y="150" width="180" height="40" fill="#7f1d1d" stroke="#f87171"/>
+  <text x="160" y="175" fill="#fef2f2" font-size="12" text-anchor="middle" font-family="sans-serif">光阻表面 T-Topping 變形</text>
+  <text x="160" y="220" fill="#fca5a5" font-size="11" text-anchor="middle" font-family="sans-serif">空氣中微量揮發性胺類 (AMC)</text>
+  <text x="160" y="240" fill="#fca5a5" font-size="11" text-anchor="middle" font-family="sans-serif">中和光阻酸性，圖案變質！</text>
+  <rect x="60" y="260" width="200" height="35" rx="4" fill="#166534"/>
+  <text x="160" y="282" fill="#86efac" font-size="11" font-weight="bold" text-anchor="middle" font-family="sans-serif">💡 解方：【光阻重洗 Rework】</text>
+
+  <!-- Hazard 2: Native Oxide Growth -->
+  <rect x="320" y="80" width="240" height="230" rx="8" fill="#450a0a" stroke="#ef4444"/>
+  <text x="440" y="110" fill="#fca5a5" font-size="14" font-weight="bold" text-anchor="middle" font-family="sans-serif">ETCH → DIFF 危機</text>
+  <rect x="350" y="150" width="180" height="40" fill="#7f1d1d" stroke="#f87171"/>
+  <text x="440" y="175" fill="#fef2f2" font-size="12" text-anchor="middle" font-family="sans-serif">原生氧化層非受控生長</text>
+  <text x="440" y="220" fill="#fca5a5" font-size="11" text-anchor="middle" font-family="sans-serif">蝕刻後裸矽活性極高</text>
+  <text x="440" y="240" fill="#fca5a5" font-size="11" text-anchor="middle" font-family="sans-serif">生長 1nm 氧化皮，導電全毀！</text>
+  <rect x="340" y="260" width="200" height="35" rx="4" fill="#991b1b"/>
+  <text x="440" y="282" fill="#fecaca" font-size="11" font-weight="bold" text-anchor="middle" font-family="sans-serif">⚠️ 逾時 15s：整批強制報廢</text>
+
+  <text x="300" y="360" fill="#94a3b8" font-size="12" text-anchor="middle" font-family="sans-serif">半導體科普圖鑑 07：Q-Time 限時等待時間的化學原罪</text>
+</svg>

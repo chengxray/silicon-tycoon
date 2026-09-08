@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" width="600" height="400">
+  <rect width="600" height="400" rx="16" fill="#0b1329" stroke="#14b8a6" stroke-width="2"/>
+  <text x="300" y="45" fill="#2dd4bf" font-size="18" font-weight="bold" text-anchor="middle" font-family="sans-serif">【化學機械平坦化 (CMP Polishing) 原理】</text>
+
+  <rect x="50" y="80" width="500" height="230" rx="8" fill="#1e293b" stroke="#334155"/>
+  <!-- Polishing Pad -->
+  <rect x="80" y="240" width="440" height="30" fill="#042f2e" stroke="#14b8a6" stroke-width="2"/>
+  <text x="300" y="260" fill="#5eead4" font-size="12" text-anchor="middle" font-family="sans-serif">旋轉研磨墊 (Rotating Polishing Pad)</text>
+
+  <!-- Wafer Carrier Head -->
+  <rect x="180" y="100" width="240" height="40" rx="4" fill="#334155" stroke="#94a3b8"/>
+  <text x="300" y="125" fill="#e2e8f0" font-size="12" text-anchor="middle" font-family="sans-serif">晶圓研磨頭 (Carrier Head 下壓旋轉)</text>
+
+  <!-- Slurry Droplets -->
+  <circle cx="160" cy="220" r="6" fill="#38bdf8"/>
+  <circle cx="430" cy="215" r="6" fill="#38bdf8"/>
+  <text x="300" y="215" fill="#7dd3fc" font-size="12" font-weight="bold" text-anchor="middle" font-family="sans-serif">奈米研磨液 Slurry (化學弱酸腐蝕 + 機械顆粒磨削)</text>
+
+  <text x="300" y="340" fill="#cbd5e1" font-size="12" text-anchor="middle" font-family="sans-serif">消除晶圓表面高低起伏，使粗糙表面達到「原子級鏡面平整」，才能堆疊下一層電路！</text>
+  <text x="300" y="370" fill="#94a3b8" font-size="12" text-anchor="middle" font-family="sans-serif">半導體科普圖鑑 06：摩天大樓每層樓地板之水平打磨</text>
+</svg>
