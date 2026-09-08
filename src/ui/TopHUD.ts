@@ -20,6 +20,8 @@ export interface TopHUDCallbacks {
   onOpenSaveModal: () => void;
   onOpenWaferMap?: () => void;
   onOpenTutorial?: () => void;
+  onOpenFinance?: () => void;
+  onOpenLogin?: () => void;
 }
 
 export class TopHUD {
@@ -63,9 +65,9 @@ export class TopHUD {
     const isMuted = SoundEffects.isAudioMuted();
 
     this.container.innerHTML = `
-      <!-- 左側：創辦人與公司資訊 -->
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-full border border-cyan-400/50 bg-slate-800 flex items-center justify-center text-xl shadow-inner">
+      <!-- 左側：創辦人與公司資訊 (附帶 PvZ 1 經典使用者登入切換) -->
+      <div class="flex items-center gap-2.5">
+        <div id="btn-hud-profile-avatar" class="w-10 h-10 rounded-full border border-cyan-400/50 bg-slate-800 flex items-center justify-center text-xl shadow-inner cursor-pointer hover:border-amber-400 hover:scale-105 transition-all" title="點擊切換存檔 / 登入使用者 (PvZ 1 Style)">
           👤
         </div>
         <div>
@@ -76,22 +78,26 @@ export class TopHUD {
             </span>
           </div>
           <div class="text-xs text-slate-400 flex items-center gap-2">
-            <span>CEO: ${p.ceoName}</span>
-            <span class="text-slate-600">|</span>
-            <span class="text-emerald-400 font-mono text-[11px]">${p.unlockedCleanroomClass}</span>
+            <span>CEO: <strong class="text-amber-300">${p.ceoName}</strong></span>
+            <button id="btn-hud-switch-user" class="text-[10px] text-cyan-400 hover:text-amber-300 underline font-sans cursor-pointer" title="切換玩家或建立新存檔">
+              (不是你？點此登入)
+            </button>
           </div>
         </div>
       </div>
 
       <!-- 中間：核心營運三大 KPI 與工廠負荷進度條 -->
-      <div class="flex items-center gap-6">
-        <!-- 1. 現金 -->
-        <div class="text-center">
-          <div class="text-[11px] text-slate-400 font-medium">廠房資金 (Cash)</div>
-          <div class="text-sm font-bold text-amber-400 font-mono tracking-tight">
+      <div class="flex items-center gap-5">
+        <!-- 1. 現金 (點擊開啟日周月財報) -->
+        <button id="btn-hud-cash" class="text-center group cursor-pointer hover:bg-slate-800/80 px-2.5 py-1 rounded-lg transition-colors border border-transparent hover:border-amber-500/40" title="點擊檢視日、周、月收支財報與毛利分析">
+          <div class="text-[11px] text-slate-400 font-medium flex items-center justify-center gap-1">
+            <span>廠房資金</span>
+            <span class="text-[10px] text-amber-400">📊</span>
+          </div>
+          <div class="text-sm font-bold text-amber-400 font-mono tracking-tight group-hover:text-amber-300">
             NT$ ${Math.round(p.cash).toLocaleString()}
           </div>
-        </div>
+        </button>
 
         <!-- 2. 商譽 -->
         <div class="text-center">
@@ -120,7 +126,7 @@ export class TopHUD {
               <span>產線負荷 (Workload)</span>
               <span class="font-mono text-slate-200">${workloadInfo.workloadPercent}%</span>
             </div>
-            <div class="w-28 h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700/60">
+            <div class="w-24 h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700/60">
               <div style="width: ${Math.min(100, workloadInfo.workloadPercent)}%; background-color: ${workloadBarColor};" class="h-full transition-all duration-300"></div>
             </div>
           </div>
@@ -136,51 +142,61 @@ export class TopHUD {
       </div>
 
       <!-- 右側：功能導航按鈕群 -->
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-1.5">
+        <!-- 財報 (日周月收支分析) -->
+        <button id="btn-finance" class="btn-sci-fi text-xs bg-cyan-950/40 border-cyan-500/50 text-cyan-300 hover:text-white" title="開啟日、周、月收支財務分析">
+          📊 財報
+        </button>
+
         <!-- MES 自動派工開關 -->
         <button id="btn-toggle-mes" class="btn-sci-fi text-xs ${state.unlockedFeatures.mesAutoDispatch ? 'border-emerald-500/80 text-emerald-300' : 'opacity-60'}">
-          ${state.unlockedFeatures.mesAutoDispatch ? '🤖 MES自動' : '⏸️ MES關閉'}
+          ${state.unlockedFeatures.mesAutoDispatch ? '🤖 MES' : '⏸️ MES'}
         </button>
 
         <!-- 合約板 -->
-        <button id="btn-contracts" class="btn-sci-fi">
+        <button id="btn-contracts" class="btn-sci-fi text-xs">
           📜 合約
         </button>
 
         <!-- 商城 -->
-        <button id="btn-store" class="btn-sci-fi">
+        <button id="btn-store" class="btn-sci-fi text-xs">
           🏬 商城
         </button>
 
         <!-- 人資 -->
-        <button id="btn-hr" class="btn-sci-fi">
+        <button id="btn-hr" class="btn-sci-fi text-xs">
           👥 人資
         </button>
 
         <!-- 每日任務 -->
-        <button id="btn-quests" class="btn-sci-fi relative">
+        <button id="btn-quests" class="btn-sci-fi relative text-xs">
           📋 任務
           ${state.questState.dailyQuests.some(q => q.completed && !q.claimed) ? '<span class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400"></span>' : ''}
         </button>
 
         <!-- 成就 -->
-        <button id="btn-achievements" class="btn-sci-fi relative">
+        <button id="btn-achievements" class="btn-sci-fi relative text-xs">
           🏆 成就
           ${state.achievements.some(a => a.unlocked && !a.claimed) ? '<span class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400"></span>' : ''}
         </button>
 
+        <!-- 切換玩家存檔 (PvZ 1 登入) -->
+        <button id="btn-login-user" class="btn-sci-fi px-2.5 text-xs" title="切換玩家與存檔管理 (Who are you?)">
+          👤 登入
+        </button>
+
         <!-- 新手教學引導 -->
-        <button id="btn-tutorial" class="btn-sci-fi px-2.5" title="新手入門指引與半導體製程教學">
+        <button id="btn-tutorial" class="btn-sci-fi px-2" title="新手入門指引與半導體製程教學">
           ❓
         </button>
 
         <!-- 靜音開關 -->
-        <button id="btn-sound" class="btn-sci-fi px-2.5" title="音效切換">
+        <button id="btn-sound" class="btn-sci-fi px-2" title="音效切換">
           ${isMuted ? '🔇' : '🔊'}
         </button>
 
         <!-- 存檔 -->
-        <button id="btn-save" class="btn-sci-fi px-2.5" title="存檔與匯出">
+        <button id="btn-save" class="btn-sci-fi px-2" title="存檔與匯出">
           💾
         </button>
       </div>
@@ -215,6 +231,33 @@ export class TopHUD {
     document.getElementById('btn-advisory-alert')?.addEventListener('click', () => {
       SoundEffects.playClick();
       this.callbacks.onOpenAdvisory();
+    });
+
+    // 財報按鈕與資金卡片點擊
+    document.getElementById('btn-finance')?.addEventListener('click', () => {
+      SoundEffects.playClick();
+      this.callbacks.onOpenFinance?.();
+    });
+
+    document.getElementById('btn-hud-cash')?.addEventListener('click', () => {
+      SoundEffects.playClick();
+      this.callbacks.onOpenFinance?.();
+    });
+
+    // PvZ 1 登入與玩家切換按鈕
+    document.getElementById('btn-hud-profile-avatar')?.addEventListener('click', () => {
+      SoundEffects.playClick();
+      this.callbacks.onOpenLogin?.();
+    });
+
+    document.getElementById('btn-hud-switch-user')?.addEventListener('click', () => {
+      SoundEffects.playClick();
+      this.callbacks.onOpenLogin?.();
+    });
+
+    document.getElementById('btn-login-user')?.addEventListener('click', () => {
+      SoundEffects.playClick();
+      this.callbacks.onOpenLogin?.();
     });
 
     document.getElementById('btn-toggle-mes')?.addEventListener('click', () => {

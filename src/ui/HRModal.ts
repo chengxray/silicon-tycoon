@@ -10,6 +10,7 @@ import { SaveGameV2, StaffData, StaffRank, MachineCategory, ShiftMode, WorkShift
 import { SoundEffects } from '../audio/SoundEffects';
 import { AchievementEngine } from '../engine/AchievementEngine';
 import { MaintenanceEngine } from '../engine/MaintenanceEngine';
+import { FinanceEngine } from '../engine/FinanceEngine';
 
 interface Candidate {
   id: string;
@@ -672,6 +673,7 @@ export class HRModal {
 
         // 扣款與入職員工
         state.player.cash -= can.signingBonus;
+        FinanceEngine.recordSigningBonus(state, can.signingBonus);
         SoundEffects.playCoinChime();
 
         const currentShift = state.staff[0]?.shiftMode || 'THREE_SHIFT';

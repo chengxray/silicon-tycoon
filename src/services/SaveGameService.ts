@@ -9,10 +9,12 @@ import {
   SaveGameV2,
   MachineData,
   StaffData,
-  OrderData
+  OrderData,
+  UserProfileMeta
 } from '../types';
 import { MaintenanceEngine } from '../engine/MaintenanceEngine';
 import { AchievementEngine } from '../engine/AchievementEngine';
+import { FinanceEngine } from '../engine/FinanceEngine';
 
 export interface OfflineReport {
   offlineDurationSeconds: number;
@@ -152,19 +154,219 @@ export class SaveGameService {
         weeklyClaimed: false
       },
       achievements: AchievementEngine.getInitialAchievements(),
-      gameTime: 0
+      gameTime: 0,
+      financialState: FinanceEngine.initFinancialState(50_000_000, 70_000_000)
     };
   }
 
+  public static readonly REGISTRY_KEY = 'SILICON_TYCOON_USERS_REGISTRY';
+  public static readonly ACTIVE_USER_ID_KEY = 'SILICON_TYCOON_ACTIVE_USER_ID';
+
   /**
-   * 寫入 LocalStorage
+   * 取得所有使用者存檔列表 (若不存在則從現有存檔或預設創立並遷移)
+   */
+  public static getUserProfiles(): UserProfileMeta[] {
+    try {
+      const raw = localStorage.getItem(this.REGISTRY_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('讀取使用者目錄失敗:', e);
+    }
+
+    return this.initializeDefaultProfile();
+  }
+
+  /**
+   * 初始化第一個預設玩家存檔
+   */
+  private static initializeDefaultProfile(): UserProfileMeta[] {
+    const rawV2 = localStorage.getItem(this.STORAGE_KEY_V2);
+    let ceoName = '張創辦人';
+    let companyName = '矽島先進半導體';
+    let tier = 1;
+    let cash = 50_000_000;
+    let createdAt = Date.now();
+
+    if (rawV2) {
+      try {
+        const parsed = JSON.parse(rawV2);
+        if (parsed.player) {
+          ceoName = parsed.player.ceoName || ceoName;
+          companyName = parsed.player.companyName || companyName;
+          tier = parsed.player.foundryTier || tier;
+          cash = parsed.player.cash || cash;
+          createdAt = parsed.savedAt || createdAt;
+        }
+      } catch (_) {}
+    }
+
+    const defaultProfile: UserProfileMeta = {
+      id: 'usr_default',
+      name: ceoName,
+      companyName: companyName,
+      foundryTier: tier,
+      cash: cash,
+      createdAt: createdAt,
+      lastPlayedAt: Date.now(),
+      storageKey: this.STORAGE_KEY_V2
+    };
+
+    const list = [defaultProfile];
+    try {
+      localStorage.setItem(this.REGISTRY_KEY, JSON.stringify(list));
+      localStorage.setItem(this.ACTIVE_USER_ID_KEY, defaultProfile.id);
+    } catch (_) {}
+
+    return list;
+  }
+
+  /**
+   * 取得當前活躍使用者
+   */
+  public static getActiveUserProfile(): UserProfileMeta {
+    const profiles = this.getUserProfiles();
+    const activeId = localStorage.getItem(this.ACTIVE_USER_ID_KEY);
+    const found = profiles.find(p => p.id === activeId);
+    if (found) return found;
+
+    const first = profiles[0] || this.initializeDefaultProfile()[0];
+    localStorage.setItem(this.ACTIVE_USER_ID_KEY, first.id);
+    return first;
+  }
+
+  /**
+   * 創建新使用者 (Plants vs. Zombies 1 風格)
+   */
+  public static createUser(name: string, companyName?: string): UserProfileMeta {
+    const cleanName = name.trim() || `執行長 ${Math.floor(Math.random() * 900 + 100)}`;
+    const cleanCompany = companyName?.trim() || `${cleanName}半導體`;
+    const newId = `usr_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
+    const storageKey = `SILICON_TYCOON_SAVE_${newId}`;
+
+    const newProfile: UserProfileMeta = {
+      id: newId,
+      name: cleanName,
+      companyName: cleanCompany,
+      foundryTier: 1,
+      cash: 50_000_000,
+      createdAt: Date.now(),
+      lastPlayedAt: Date.now(),
+      storageKey: storageKey
+    };
+
+    // 建立全新開局存檔並寫入其專屬 storageKey
+    const newSave = this.createDefaultSave(cleanCompany, cleanName);
+    newSave.userId = newId;
+    localStorage.setItem(storageKey, JSON.stringify(newSave));
+
+    // 更新註冊表
+    const profiles = this.getUserProfiles();
+    profiles.push(newProfile);
+    localStorage.setItem(this.REGISTRY_KEY, JSON.stringify(profiles));
+    localStorage.setItem(this.ACTIVE_USER_ID_KEY, newId);
+
+    return newProfile;
+  }
+
+  /**
+   * 重新命名使用者
+   */
+  public static renameUser(userId: string, newName: string): boolean {
+    const cleanName = newName.trim();
+    if (!cleanName) return false;
+
+    const profiles = this.getUserProfiles();
+    const profile = profiles.find(p => p.id === userId);
+    if (!profile) return false;
+
+    profile.name = cleanName;
+    localStorage.setItem(this.REGISTRY_KEY, JSON.stringify(profiles));
+
+    // 同步修改存檔內的 ceoName
+    const saveRaw = localStorage.getItem(profile.storageKey);
+    if (saveRaw) {
+      try {
+        const parsed = JSON.parse(saveRaw);
+        if (parsed.player) {
+          parsed.player.ceoName = cleanName;
+          localStorage.setItem(profile.storageKey, JSON.stringify(parsed));
+        }
+      } catch (_) {}
+    }
+
+    return true;
+  }
+
+  /**
+   * 刪除使用者存檔
+   */
+  public static deleteUser(userId: string): { success: boolean; message?: string } {
+    const profiles = this.getUserProfiles();
+    if (profiles.length <= 1) {
+      return { success: false, message: '至少需要保留一個玩家存檔，無法全部刪除！' };
+    }
+
+    const idx = profiles.findIndex(p => p.id === userId);
+    if (idx === -1) return { success: false, message: '找不到該玩家存檔！' };
+
+    const target = profiles[idx];
+    localStorage.removeItem(target.storageKey);
+    profiles.splice(idx, 1);
+    localStorage.setItem(this.REGISTRY_KEY, JSON.stringify(profiles));
+
+    // 若刪除的是當前玩家，切換至剩餘的第一位
+    const activeId = localStorage.getItem(this.ACTIVE_USER_ID_KEY);
+    if (activeId === userId) {
+      localStorage.setItem(this.ACTIVE_USER_ID_KEY, profiles[0].id);
+    }
+
+    return { success: true };
+  }
+
+  /**
+   * 切換活躍使用者並載入該存檔
+   */
+  public static switchActiveUser(userId: string): SaveGameV2 | null {
+    const profiles = this.getUserProfiles();
+    const profile = profiles.find(p => p.id === userId);
+    if (!profile) return null;
+
+    localStorage.setItem(this.ACTIVE_USER_ID_KEY, userId);
+    return this.loadFromLocalStorage();
+  }
+
+  /**
+   * 寫入 LocalStorage (支援多玩家獨立存檔空間)
    */
   public static saveToLocalStorage(state: SaveGameV2): boolean {
     try {
       state.savedAt = Date.now();
       state.lastOnlineTimestamp = Date.now();
+      const activeUser = this.getActiveUserProfile();
+      const key = (state.userId && state.userId === activeUser.id)
+        ? activeUser.storageKey
+        : (activeUser.storageKey || this.STORAGE_KEY_V2);
+
       const json = JSON.stringify(state);
-      localStorage.setItem(this.STORAGE_KEY_V2, json);
+      localStorage.setItem(key, json);
+
+      // 同步更新註冊表中的基本資訊
+      const profiles = this.getUserProfiles();
+      const p = profiles.find(pr => pr.id === activeUser.id);
+      if (p) {
+        p.cash = state.player.cash;
+        p.foundryTier = state.player.foundryTier;
+        p.companyName = state.player.companyName;
+        p.name = state.player.ceoName;
+        p.lastPlayedAt = Date.now();
+        localStorage.setItem(this.REGISTRY_KEY, JSON.stringify(profiles));
+      }
+
       return true;
     } catch (err) {
       console.error('LocalStorage 存檔失敗:', err);
@@ -173,17 +375,26 @@ export class SaveGameService {
   }
 
   /**
-   * 從 LocalStorage 載入存檔 (自動檢查 V2 與向後相容 V1 遷移)
+   * 從 LocalStorage 載入當前活躍使用者的存檔 (自動檢查 V2 與向後相容 V1 遷移)
    */
   public static loadFromLocalStorage(): SaveGameV2 | null {
     try {
-      const rawV2 = localStorage.getItem(this.STORAGE_KEY_V2);
-      if (rawV2) {
-        const parsed = JSON.parse(rawV2);
+      const activeUser = this.getActiveUserProfile();
+      let raw = localStorage.getItem(activeUser.storageKey);
+
+      // 若 activeUser.storageKey 未讀到且 activeUser 是 default，退回 STORAGE_KEY_V2
+      if (!raw && activeUser.id === 'usr_default') {
+        raw = localStorage.getItem(this.STORAGE_KEY_V2);
+      }
+
+      if (raw) {
+        const parsed = JSON.parse(raw);
         if (parsed.schemaVersion === 2) {
           if (parsed.staff) {
             parsed.staff = this.normalizeStaffData(parsed.staff);
           }
+          parsed.userId = activeUser.id;
+          parsed.financialState = FinanceEngine.ensureFinancialState(parsed);
           return parsed as SaveGameV2;
         }
       }
@@ -195,12 +406,18 @@ export class SaveGameService {
         if (parsedV1.schemaVersion === 1) {
           console.warn('偵測到舊版 SaveGameV1 存檔，執行自動升級至 SaveGameV2...');
           const migrated = this.migrateSaveV1toV2(parsedV1 as SaveGameV1);
+          migrated.userId = activeUser.id;
+          migrated.financialState = FinanceEngine.ensureFinancialState(migrated);
           this.saveToLocalStorage(migrated);
           return migrated;
         }
       }
 
-      return null;
+      // 若沒有任何存檔，建立初始預設存檔
+      const initialSave = this.createDefaultSave(activeUser.companyName, activeUser.name);
+      initialSave.userId = activeUser.id;
+      this.saveToLocalStorage(initialSave);
+      return initialSave;
     } catch (err) {
       console.error('LocalStorage 讀檔失敗:', err);
       return null;

@@ -10,6 +10,7 @@ import { SaveGameV2, MachineCategory, MachineData } from '../types';
 import { ASSET_REGISTRY } from '../services/AssetRegistry';
 import { SoundEffects } from '../audio/SoundEffects';
 import { AchievementEngine } from '../engine/AchievementEngine';
+import { FinanceEngine } from '../engine/FinanceEngine';
 
 export interface StoreEquipmentItem {
   modelId: string;
@@ -614,6 +615,7 @@ export class StoreModal {
 
         // 扣款
         state.player.cash -= spec.price;
+        FinanceEngine.recordCapEx(state, spec.price);
         SoundEffects.playCoinChime();
 
         // 計算下一個可用座標 (避免完全重疊)
@@ -660,6 +662,7 @@ export class StoreModal {
         }
 
         state.player.cash -= cost;
+        FinanceEngine.recordMaintenance(state, cost);
         machine.wear = 0;
         machine.status = 'IDLE';
 

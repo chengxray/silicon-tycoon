@@ -6,6 +6,7 @@
 import { SaveGameV2 } from '../types';
 import { QuestEngine } from '../engine/QuestEngine';
 import { SoundEffects } from '../audio/SoundEffects';
+import { FinanceEngine } from '../engine/FinanceEngine';
 
 export class QuestModal {
   public static show(state: SaveGameV2, onUpdate: () => void): void {
@@ -198,6 +199,7 @@ export class QuestModal {
             const res = QuestEngine.claimSingleQuest(state.questState, id);
             if (res.success) {
               state.player.cash += res.cash;
+              FinanceEngine.recordSubsidy(state, res.cash);
               state.player.popularity += res.popularity;
               SoundEffects.playCoin();
               render();
@@ -211,6 +213,7 @@ export class QuestModal {
         const res = QuestEngine.claimDailyAllClear(state.questState, state.player.foundryTier);
         if (res.success) {
           state.player.cash += res.cash;
+          FinanceEngine.recordSubsidy(state, res.cash);
           state.player.popularity += res.popularity;
           SoundEffects.playSuccess();
           render();
@@ -222,6 +225,7 @@ export class QuestModal {
         const res = QuestEngine.claimWeeklyBounty(state.questState, state.player.foundryTier);
         if (res.success) {
           state.player.cash += res.cash;
+          FinanceEngine.recordSubsidy(state, res.cash);
           state.player.popularity += res.popularity;
           SoundEffects.playSuccess();
           render();

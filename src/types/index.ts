@@ -141,6 +141,61 @@ export interface AchievementItem {
   claimed: boolean;
 }
 
+export interface UserProfileMeta {
+  id: string;
+  name: string;
+  companyName: string;
+  foundryTier: number;
+  cash: number;
+  createdAt: number;
+  lastPlayedAt: number;
+  storageKey: string;
+}
+
+export interface FinancialRecord {
+  periodType: 'DAY' | 'WEEK' | 'MONTH';
+  periodIndex: number;
+  label: string;
+  timestamp: number;
+  revenue: {
+    waferSales: number;
+    nreFees: number;
+    subsidies: number;
+    totalRevenue: number;
+  };
+  expenses: {
+    depreciation: number;
+    maintenance: number;
+    utilities: number;
+    payroll: number;
+    scraps: number;
+    capex: number;
+    totalExpenses: number;
+  };
+  grossProfit: number;
+  grossMarginPct: number;
+  netProfit: number;
+  netMarginPct: number;
+  endingCash: number;
+  endingNetWorth: number;
+}
+
+export interface FinancialState {
+  daySeconds: number;
+  currentDay: number;
+  currentWeek: number;
+  currentMonth: number;
+  today: FinancialRecord;
+  thisWeek: FinancialRecord;
+  thisMonth: FinancialRecord;
+  dailyHistory: FinancialRecord[];
+  weeklyHistory: FinancialRecord[];
+  monthlyHistory: FinancialRecord[];
+  allTimeRevenue: number;
+  allTimeExpenses: number;
+  allTimeProfit: number;
+}
+
 export interface SaveGameV1 {
   schemaVersion: 1;
   savedAt: number;
@@ -161,6 +216,7 @@ export interface SaveGameV2 {
   schemaVersion: 2;
   savedAt: number;
   lastOnlineTimestamp: number;
+  userId?: string;
   player: PlayerProfile;
   unlockedFeatures: UnlockedFeatures;
   facility: FacilityState;
@@ -173,5 +229,6 @@ export interface SaveGameV2 {
   questState: QuestState;
   achievements: AchievementItem[];
   gameTime: number;
+  financialState?: FinancialState;
 }
 

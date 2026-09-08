@@ -6,6 +6,7 @@
 import { SaveGameV2, AchievementItem } from '../types';
 import { AchievementEngine } from '../engine/AchievementEngine';
 import { SoundEffects } from '../audio/SoundEffects';
+import { FinanceEngine } from '../engine/FinanceEngine';
 
 export class AchievementModal {
   private static activeCategory: AchievementItem['category'] = 'onboarding';
@@ -189,6 +190,7 @@ export class AchievementModal {
             const res = AchievementEngine.claimReward(state.achievements, id);
             if (res.success) {
               state.player.cash += res.cash;
+              FinanceEngine.recordSubsidy(state, res.cash);
               SoundEffects.playCoin();
               render();
               onUpdate();

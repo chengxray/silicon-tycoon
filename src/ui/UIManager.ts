@@ -16,6 +16,8 @@ import { DevConsole } from './DevConsole';
 import { WaferMapModal } from './WaferMapModal';
 import { LayerAllocationModal } from './LayerAllocationModal';
 import { TutorialOverlay } from './TutorialOverlay';
+import { FinancialReportModal } from './FinancialReportModal';
+import { UserLoginModal } from './UserLoginModal';
 import { SaveGameService } from '../services/SaveGameService';
 import { SoundEffects } from '../audio/SoundEffects';
 import { OrderData, WaferLotData } from '../types';
@@ -24,14 +26,17 @@ export class UIManager {
   private topHUD: TopHUD;
   private state: SaveGameV2;
   private onStateUpdated: () => void;
+  private onUserSwitched?: (newState: SaveGameV2) => void;
 
   constructor(
     state: SaveGameV2,
     onSpeedChange: (speed: number) => void,
-    onStateUpdated: () => void
+    onStateUpdated: () => void,
+    onUserSwitched?: (newState: SaveGameV2) => void
   ) {
     this.state = state;
     this.onStateUpdated = onStateUpdated;
+    this.onUserSwitched = onUserSwitched;
 
     // 初始化 Top HUD
     this.topHUD = new TopHUD('top-hud', {
@@ -44,7 +49,9 @@ export class UIManager {
       onToggleMES: (_enabled) => this.onStateUpdated(),
       onOpenSaveModal: () => this.openSaveModal(),
       onOpenWaferMap: () => this.openWaferMap(),
-      onOpenTutorial: () => this.openTutorial()
+      onOpenTutorial: () => this.openTutorial(),
+      onOpenFinance: () => this.openFinancialReport(),
+      onOpenLogin: () => this.openUserLogin()
     });
 
     // 初始化 Dev Console 監聽器
@@ -311,6 +318,27 @@ export class UIManager {
 
   public openLayerAllocation(order: OrderData): void {
     LayerAllocationModal.show(this.state, order, () => {
+      this.render();
+      this.onStateUpdated();
+    });
+  }
+
+  public updateState(newState: SaveGameV2): void {
+    this.state = newState;
+    this.render();
+  }
+
+  public openFinancialReport(): void {
+    FinancialReportModal.show(this.state, () => {
+      this.render();
+      this.onStateUpdated();
+    });
+  }
+
+  public openUserLogin(): void {
+    UserLoginModal.show(this.state, (newState) => {
+      this.state = newState;
+      this.onUserSwitched?.(newState);
       this.render();
       this.onStateUpdated();
     });

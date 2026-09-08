@@ -13,6 +13,7 @@ import { SoundEffects } from '../audio/SoundEffects';
 import { MaintenanceEngine } from '../engine/MaintenanceEngine';
 import { ProductionEngine } from '../engine/ProductionEngine';
 import { RayleighEngine } from '../engine/RayleighEngine';
+import { FinanceEngine } from '../engine/FinanceEngine';
 import { StoreModal } from './StoreModal';
 
 export class MachinePanel {
@@ -463,6 +464,7 @@ export class MachinePanel {
       }
 
       state.player.cash -= overhaulCost;
+      FinanceEngine.recordMaintenance(state, overhaulCost);
       machine.wear = 0;
       machine.status = 'IDLE';
 

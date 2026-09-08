@@ -10,6 +10,7 @@ import { EconomyEngine } from '../engine/EconomyEngine';
 import { SoundEffects } from '../audio/SoundEffects';
 import { RayleighEngine } from '../engine/RayleighEngine';
 import { AchievementEngine } from '../engine/AchievementEngine';
+import { FinanceEngine } from '../engine/FinanceEngine';
 import { WaferMapModal } from './WaferMapModal';
 import { LayerAllocationModal } from './LayerAllocationModal';
 
@@ -430,6 +431,7 @@ export class ContractModal {
 
         // 1. 即刻發放 NRE 光罩研發款
         state.player.cash += order.nrePaid;
+        FinanceEngine.recordNREFee(state, order.nrePaid);
 
         // 2. 加入 activeOrders
         state.activeOrders.push(order);
@@ -484,6 +486,7 @@ export class ContractModal {
         );
 
         state.player.cash += payout.netPayout;
+        FinanceEngine.recordWaferSales(state, payout.netPayout);
         state.clawbackDebt = payout.remainingDebt;
 
         // 移除完工訂單與相關 lots

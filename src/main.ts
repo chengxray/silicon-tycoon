@@ -14,6 +14,7 @@ import { AchievementEngine } from './engine/AchievementEngine';
 import { MaintenanceEngine } from './engine/MaintenanceEngine';
 import { ProductionEngine } from './engine/ProductionEngine';
 import { EconomyEngine } from './engine/EconomyEngine';
+import { FinanceEngine } from './engine/FinanceEngine';
 import { DevConsole } from './ui/DevConsole';
 import { MachinePanel } from './ui/MachinePanel';
 import { MachineData, OrderData } from './types';
@@ -81,6 +82,12 @@ class FoundryGame {
       },
       () => {
         this.onStateChanged();
+      },
+      (newState) => {
+        this.state = newState;
+        this.cleanroomScene.updateState(this.state);
+        this.uiManager.updateState(this.state);
+        this.onStateChanged();
       }
     );
 
@@ -96,6 +103,9 @@ class FoundryGame {
 
     for (let step = 0; step < speed; step++) {
       this.state.gameTime += 1;
+
+      // 0. 財務收支模擬 (折舊、水電化學耗損、薪資與日/周/月推進)
+      FinanceEngine.tickSimulation(this.state, 1);
 
       // 1. 維護機台磨損與 🛡️ TPM 在線保養檢核
       const staffMap = new Map(this.state.staff.map((s) => [s.id, s]));
@@ -201,6 +211,7 @@ class FoundryGame {
             this.state.clawbackDebt
           );
           this.state.player.cash += payout.netPayout;
+          FinanceEngine.recordWaferSales(this.state, payout.netPayout);
           this.state.clawbackDebt = payout.remainingDebt;
           this.state.player.popularity = Math.min(100, this.state.player.popularity + 1);
 

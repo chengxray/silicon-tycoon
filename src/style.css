@@ -380,3 +380,34 @@ img {
   animation: pulseGlow 1.2s infinite ease-in-out;
 }
 
+/* Plants vs Zombies 1 Style Login / Profile Dialog */
+.pvz-dialog {
+  background: radial-gradient(circle at center, #1e1b18 0%, #0d0c0a 100%) !important;
+  border: 3px solid #b45309 !important;
+  box-shadow: 0 0 30px rgba(245, 158, 11, 0.35), inset 0 0 18px rgba(180, 83, 9, 0.25) !important;
+}
+
+.pvz-dialog .user-profile-item {
+  position: relative;
+  overflow: hidden;
+}
+
+.pvz-dialog .user-profile-item::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.08) 0%, transparent 60%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.pvz-dialog .user-profile-item:hover::after {
+  opacity: 1;
+}
+
+/* Financial Report Modal Enhancements */
+.fin-bar-container:hover .fin-bar-fill {
+  filter: brightness(1.25);
+}
+
