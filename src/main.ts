@@ -110,6 +110,31 @@ class FoundryGame {
         }
       }
 
+      // 動態判定哪些站點正在加工，即時更新 machine.status (IDLE vs PROCESSING)
+      const activeStations = new Set<string>();
+      for (const lot of this.state.activeLots) {
+        if (lot.status === 'PROCESSING') {
+          if (lot.currentStation === 'LIT') {
+            if (lot.litSubStep === 'COAT' || lot.litSubStep === 'DEVELOP') {
+              activeStations.add('TRACK');
+            } else {
+              activeStations.add('LITHO');
+            }
+          } else {
+            activeStations.add(lot.currentStation);
+          }
+        }
+      }
+
+      for (const machine of this.state.machines) {
+        if (machine.status === 'EXPLODED' || machine.status === 'MAINTENANCE') continue;
+        if (activeStations.has(machine.category)) {
+          machine.status = 'PROCESSING';
+        } else {
+          machine.status = 'IDLE';
+        }
+      }
+
       // 2. 推進在製批次 (Wafer Lots)
       const completedOrders: OrderData[] = [];
       for (const lot of this.state.activeLots) {

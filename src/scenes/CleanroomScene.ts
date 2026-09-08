@@ -27,7 +27,9 @@ export class CleanroomScene extends Phaser.Scene {
     {
       container: Phaser.GameObjects.Container;
       ledArc: Phaser.GameObjects.Arc;
+      label: Phaser.GameObjects.Text;
       tpmText?: Phaser.GameObjects.Text;
+      processingText?: Phaser.GameObjects.Text;
       sprite?: Phaser.GameObjects.Image;
     }
   > = new Map();
@@ -246,7 +248,7 @@ export class CleanroomScene extends Phaser.Scene {
         container.add(ledArc);
 
         // 4. 機台名稱與磨損率文字
-        const label = this.add.text(0, 15, `${machine.name}`, {
+        const label = this.add.text(0, 15, `${machine.name} (${Math.round(machine.wear)}%)`, {
           fontFamily: 'Noto Sans TC, sans-serif',
           fontSize: '11px',
           fontStyle: 'bold',
@@ -275,7 +277,22 @@ export class CleanroomScene extends Phaser.Scene {
           container.add(tpmText);
         }
 
-        // 6. 互動點擊事件
+        // 6. ⚡ 加工中 (PROCESSING) 即時徽章
+        let processingText: Phaser.GameObjects.Text | undefined;
+        if (machine.status === 'PROCESSING') {
+          processingText = this.add.text(0, -110, '⚡ 加工中', {
+            fontFamily: 'Noto Sans TC, sans-serif',
+            fontSize: '10px',
+            fontStyle: 'bold',
+            color: '#38bdf8',
+            backgroundColor: 'rgba(8, 47, 73, 0.95)',
+            padding: { x: 5, y: 2 }
+          });
+          processingText.setOrigin(0.5);
+          container.add(processingText);
+        }
+
+        // 7. 互動點擊事件
         container.setSize(this.tileWidth * 0.8, this.tileHeight * 1.8);
         container.setInteractive({ useHandCursor: true });
 
@@ -292,15 +309,37 @@ export class CleanroomScene extends Phaser.Scene {
           }
         });
 
-        this.machineMap.set(machine.id, { container, ledArc, tpmText, sprite });
+        this.machineMap.set(machine.id, { container, ledArc, label, tpmText, processingText, sprite });
       } else {
         // 更新現有機台狀態與 LED
         entry.ledArc.setFillStyle(this.getLEDColor(machine.status));
+        entry.label.setText(`${machine.name} (${Math.round(machine.wear)}%)`);
+
+        // 更新加工中徽章
+        if (machine.status === 'PROCESSING') {
+          if (!entry.processingText) {
+            const pText = this.add.text(0, -110, '⚡ 加工中', {
+              fontFamily: 'Noto Sans TC, sans-serif',
+              fontSize: '10px',
+              fontStyle: 'bold',
+              color: '#38bdf8',
+              backgroundColor: 'rgba(8, 47, 73, 0.95)',
+              padding: { x: 5, y: 2 }
+            });
+            pText.setOrigin(0.5);
+            entry.container.add(pText);
+            entry.processingText = pText;
+          }
+        } else if (entry.processingText) {
+          entry.processingText.destroy();
+          entry.processingText = undefined;
+        }
+
         const assignedEng = machine.assignedEngineerId ? staffMap.get(machine.assignedEngineerId) : null;
         const tpmCheck = MaintenanceEngine.checkTPMConditions(machine, assignedEng);
 
         if (tpmCheck.isTPMActive && !entry.tpmText) {
-          const tpmText = this.add.text(0, -110, '🛡️ TPM 零故障', {
+          const tpmText = this.add.text(0, -125, '🛡️ TPM 零故障', {
             fontFamily: 'Noto Sans TC, sans-serif',
             fontSize: '10px',
             fontStyle: 'bold',

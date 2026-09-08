@@ -305,17 +305,17 @@ export class StoreModal {
     ];
 
     container.innerHTML = `
-      <div class="modal-backdrop">
+      <div id="modal-backdrop-store" class="modal-backdrop">
         <div class="modal-content glass-panel glass-panel-glow max-w-5xl max-h-[90vh] flex flex-col text-slate-100 p-0 overflow-hidden">
           
           <!-- Header -->
-          <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700/80 bg-slate-900/60">
+          <div class="modal-header flex items-center justify-between px-6 py-4 border-b border-slate-700/80 bg-slate-900/80">
             <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-xl">
+              <div class="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-xl flex-shrink-0">
                 🏭
               </div>
               <div>
-                <h3 class="text-lg font-bold text-white tracking-wide flex items-center gap-2">
+                <h3 class="text-base font-bold text-white tracking-wide flex items-center gap-2">
                   <span>半導體設備採購與廠務商城</span>
                   <span class="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono border border-amber-500/30">
                     目前資金: NT$ ${Math.round(state.player.cash).toLocaleString()}
@@ -327,13 +327,13 @@ export class StoreModal {
               </div>
             </div>
 
-            <button id="btn-close-store" class="w-8 h-8 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center font-mono text-base transition-colors">
+            <button id="btn-close-store" class="w-8 h-8 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center font-mono text-base transition-colors" title="關閉商城">
               ✕
             </button>
           </div>
 
           <!-- Category Nav Tabs -->
-          <div class="flex border-b border-slate-700/60 bg-slate-900/30 px-6 pt-2 overflow-x-auto gap-1">
+          <div class="flex border-b border-slate-700/60 bg-slate-900/40 px-6 pt-2 overflow-x-auto gap-1 flex-shrink-0">
             ${categories.map(cat => {
               const isActive = this.activeCategory === cat.key;
               const isCmpLocked = cat.key === 'CMP' && !state.unlockedFeatures.cmp;
@@ -353,11 +353,18 @@ export class StoreModal {
           </div>
 
           <!-- Body Content -->
-          <div class="p-6 overflow-y-auto flex-1 space-y-4">
+          <div class="modal-body p-6 overflow-y-auto flex-1 space-y-4">
             ${this.activeCategory === 'FLEET'
               ? this.renderFleetTab(state)
               : this.renderCatalogTab(state)
             }
+          </div>
+
+          <!-- Footer with Return Button -->
+          <div class="modal-footer p-3 border-t border-slate-700/80 bg-slate-900/90 flex items-center justify-end px-6">
+            <button id="btn-back-store" class="btn-sci-fi px-5 py-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 border-slate-600 text-white shadow-md">
+              ◀ 返回無塵室 (Back to Cleanroom)
+            </button>
           </div>
 
         </div>
@@ -392,8 +399,8 @@ export class StoreModal {
             <div class="p-4 rounded-xl bg-slate-900/80 border ${isUnlocked ? 'border-slate-800 hover:border-amber-500/40' : 'border-slate-800/40 opacity-70'} transition-all flex flex-col justify-between space-y-3">
               
               <div class="flex items-start gap-3">
-                <div class="w-16 h-16 rounded-lg bg-slate-950 border border-slate-800 flex-shrink-0 flex items-center justify-center p-1 overflow-hidden relative group">
-                  <img src="${item.assetPath}" alt="${item.name}" class="w-full h-full object-contain filter drop-shadow" />
+                <div class="store-thumb-box machine-card-thumb w-16 h-16 rounded-lg bg-slate-950 border border-slate-800 flex-shrink-0 flex items-center justify-center p-1 overflow-hidden relative group">
+                  <img src="${item.assetPath}" alt="${item.name}" class="w-full h-full object-contain filter drop-shadow" style="max-width: 56px; max-height: 56px;" />
                 </div>
 
                 <div class="flex-1 min-w-0">
@@ -487,8 +494,8 @@ export class StoreModal {
           return `
             <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div class="flex items-center gap-3">
-                <div class="w-12 h-12 rounded-lg bg-slate-950 border border-slate-800 flex-shrink-0 flex items-center justify-center p-1">
-                  <img src="${spec ? spec.assetPath : ASSET_REGISTRY.machines.litho_contact.path}" alt="${m.name}" class="w-full h-full object-contain" />
+                <div class="store-thumb-box machine-card-thumb w-12 h-12 rounded-lg bg-slate-950 border border-slate-800 flex-shrink-0 flex items-center justify-center p-1 overflow-hidden">
+                  <img src="${spec ? spec.assetPath : ASSET_REGISTRY.machines.litho_contact.path}" alt="${m.name}" class="w-full h-full object-contain" style="max-width: 44px; max-height: 44px;" />
                 </div>
                 <div>
                   <div class="flex items-center gap-2">
@@ -543,10 +550,28 @@ export class StoreModal {
     state: SaveGameV2,
     onUpdate: () => void
   ): void {
-    // 關閉
-    document.getElementById('btn-close-store')?.addEventListener('click', () => {
+    const closeModal = () => {
       SoundEffects.playClick();
       container.innerHTML = '';
+      window.removeEventListener('keydown', onKeyDown);
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeModal();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+
+    // 關閉
+    document.getElementById('btn-close-store')?.addEventListener('click', closeModal);
+    document.getElementById('btn-back-store')?.addEventListener('click', closeModal);
+
+    // 點擊背景關閉
+    document.getElementById('modal-backdrop-store')?.addEventListener('click', (e) => {
+      if (e.target === document.getElementById('modal-backdrop-store')) {
+        closeModal();
+      }
     });
 
     // 分頁切換

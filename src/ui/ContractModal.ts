@@ -56,17 +56,17 @@ export class ContractModal {
     const bestLithoCD = this.getBestLithoCD(state);
 
     container.innerHTML = `
-      <div class="modal-backdrop">
+      <div id="modal-backdrop-contract" class="modal-backdrop">
         <div class="modal-content glass-panel glass-panel-glow max-w-4xl max-h-[90vh] flex flex-col text-slate-100 p-0 overflow-hidden">
           
           <!-- Header -->
-          <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700/80 bg-slate-900/60">
+          <div class="modal-header flex items-center justify-between px-6 py-4 border-b border-slate-700/80 bg-slate-900/80">
             <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-xl">
+              <div class="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-xl flex-shrink-0">
                 📋
               </div>
               <div>
-                <h3 class="text-lg font-bold text-white tracking-wide flex items-center gap-2">
+                <h3 class="text-base font-bold text-white tracking-wide flex items-center gap-2">
                   <span>晶圓代工合約與光罩廠</span>
                   <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-mono border border-cyan-500/30">
                     Tier ${state.player.foundryTier}
@@ -87,14 +87,14 @@ export class ContractModal {
                   <span class="text-[10px] text-slate-400">(${rollingYield !== null ? (rollingYield * 100).toFixed(1) + '%' : 'N/A'})</span>
                 </div>
               </div>
-              <button id="btn-close-contract" class="w-8 h-8 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center font-mono text-base transition-colors">
+              <button id="btn-close-contract" class="w-8 h-8 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center font-mono text-base transition-colors" title="關閉合約板">
                 ✕
               </button>
             </div>
           </div>
 
           <!-- Tabs -->
-          <div class="flex border-b border-slate-700/60 bg-slate-900/30 px-6 pt-2">
+          <div class="flex border-b border-slate-700/60 bg-slate-900/40 px-6 pt-2 flex-shrink-0">
             <button id="tab-market" class="px-4 py-2.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 ${this.currentTab === 'MARKET' ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400 hover:text-slate-200'}">
               <span>🌐 承接市場訂單池</span>
               <span class="px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] font-mono">${this.marketOrders.length}</span>
@@ -113,11 +113,18 @@ export class ContractModal {
           </div>
 
           <!-- Body -->
-          <div class="p-6 overflow-y-auto flex-1 space-y-4">
+          <div class="modal-body p-6 overflow-y-auto flex-1 space-y-4">
             ${this.currentTab === 'MARKET'
               ? this.renderMarketOrders(state, bestLithoCD)
               : this.renderActiveOrders(state)
             }
+          </div>
+
+          <!-- Footer with Return Button -->
+          <div class="modal-footer p-3 border-t border-slate-700/80 bg-slate-900/90 flex items-center justify-end px-6">
+            <button id="btn-back-contract" class="btn-sci-fi px-5 py-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 border-slate-600 text-white shadow-md">
+              ◀ 返回無塵室 (Back to Cleanroom)
+            </button>
           </div>
 
         </div>
@@ -287,6 +294,15 @@ export class ContractModal {
                         stationBadge = `<span class="text-amber-300 font-bold">LIT (${lot.litSubStep || 'COAT'})</span>`;
                       }
 
+                      const targetMachine = state.machines.find(m => {
+                        if (lot.currentStation === 'LIT') {
+                          if (lot.litSubStep === 'COAT' || lot.litSubStep === 'DEVELOP') return m.category === 'TRACK';
+                          return m.category === 'LITHO';
+                        }
+                        return m.category === lot.currentStation;
+                      });
+                      const machineName = targetMachine ? targetMachine.name : '自動分配中';
+
                       let qTimeNotice = '';
                       if (lot.qTimeDeadline !== null) {
                         const qRem = Math.max(0, lot.qTimeDeadline - state.gameTime);
@@ -294,20 +310,24 @@ export class ContractModal {
                       }
 
                       return `
-                        <div class="p-2 rounded bg-slate-900 border border-slate-800 text-xs flex items-center justify-between gap-2">
+                        <div class="p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-xs flex items-center justify-between gap-2">
                           <div>
-                            <div class="font-mono text-slate-300 font-semibold flex items-center gap-1.5">
+                            <div class="font-mono text-slate-200 font-semibold flex items-center gap-1.5">
                               <span>${lot.lotId}</span>
                               <button class="btn-inspect-lot text-[9px] px-1.5 py-0.5 rounded bg-cyan-950 hover:bg-cyan-800 text-cyan-300 border border-cyan-700/50 flex items-center gap-0.5 cursor-pointer" data-lot-id="${lot.lotId}" title="點擊檢視蒙地卡羅晶圓圖">
                                 <span>🔍</span><span>晶圓圖</span>
                               </button>
                             </div>
-                            <div class="text-[10px] text-slate-400">
+                            <div class="text-[10px] text-slate-400 mt-0.5">
                               層數: ${lot.currentLayer}/${lot.totalLayers} | 站點: ${stationBadge}
                             </div>
+                            <div class="text-[10px] text-cyan-300/90 font-mono mt-0.5 flex items-center gap-1">
+                              <span>🏭 機台:</span>
+                              <span class="font-bold truncate max-w-[140px]">${machineName}</span>
+                            </div>
                           </div>
-                          <div class="text-right">
-                            <div class="text-[10px] text-emerald-400 font-mono">良率: ${(lot.yieldMultiplier * 100).toFixed(0)}%</div>
+                          <div class="text-right flex-shrink-0">
+                            <div class="text-[10px] text-emerald-400 font-mono font-bold">良率: ${(lot.yieldMultiplier * 100).toFixed(0)}%</div>
                             ${qTimeNotice}
                           </div>
                         </div>
@@ -354,10 +374,28 @@ export class ContractModal {
     state: SaveGameV2,
     onUpdate: () => void
   ): void {
-    // 關閉
-    document.getElementById('btn-close-contract')?.addEventListener('click', () => {
+    const closeModal = () => {
       SoundEffects.playClick();
       container.innerHTML = '';
+      window.removeEventListener('keydown', onKeyDown);
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeModal();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+
+    // 關閉
+    document.getElementById('btn-close-contract')?.addEventListener('click', closeModal);
+    document.getElementById('btn-back-contract')?.addEventListener('click', closeModal);
+
+    // 點擊背景關閉
+    document.getElementById('modal-backdrop-contract')?.addEventListener('click', (e) => {
+      if (e.target === document.getElementById('modal-backdrop-contract')) {
+        closeModal();
+      }
     });
 
     // 分頁切換

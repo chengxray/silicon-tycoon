@@ -57,7 +57,7 @@ export class WaferMapModal {
       : 'N/A';
 
     container.innerHTML = `
-      <div class="modal-backdrop">
+      <div id="modal-backdrop-wafer" class="modal-backdrop">
         <div class="modal-content glass-panel glass-panel-glow max-w-3xl max-h-[90vh] flex flex-col text-slate-100 p-0 overflow-hidden animate-fadeIn">
           
           <!-- Header -->
@@ -238,6 +238,13 @@ export class WaferMapModal {
 
           </div>
 
+          <!-- Footer with Return Button -->
+          <div class="modal-footer p-3 border-t border-slate-700/80 bg-slate-900/90 flex items-center justify-end px-6">
+            <button id="btn-back-wafer" class="btn-sci-fi px-5 py-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 border-slate-600 text-white shadow-md">
+              ◀ 返回無塵室 (Back to Cleanroom)
+            </button>
+          </div>
+
         </div>
       </div>
     `;
@@ -250,10 +257,28 @@ export class WaferMapModal {
     state: SaveGameV2,
     onUpdate?: () => void
   ): void {
-    // 關閉
-    document.getElementById('btn-close-wafer-map')?.addEventListener('click', () => {
+    const closeModal = () => {
       SoundEffects.playClick();
       container.innerHTML = '';
+      window.removeEventListener('keydown', onKeyDown);
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeModal();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+
+    // 關閉
+    document.getElementById('btn-close-wafer-map')?.addEventListener('click', closeModal);
+    document.getElementById('btn-back-wafer')?.addEventListener('click', closeModal);
+
+    // 點擊背景關閉
+    document.getElementById('modal-backdrop-wafer')?.addEventListener('click', (e) => {
+      if (e.target === document.getElementById('modal-backdrop-wafer')) {
+        closeModal();
+      }
     });
 
     // 點選晶粒

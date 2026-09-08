@@ -93,17 +93,17 @@ export class HRModal {
     const globalShift: ShiftMode = state.staff[0]?.shiftMode || 'THREE_SHIFT';
 
     container.innerHTML = `
-      <div class="modal-backdrop">
+      <div id="modal-backdrop-hr" class="modal-backdrop">
         <div class="modal-content glass-panel glass-panel-glow max-w-4xl max-h-[90vh] flex flex-col text-slate-100 p-0 overflow-hidden">
           
           <!-- Header -->
-          <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700/80 bg-slate-900/60">
+          <div class="modal-header flex items-center justify-between px-6 py-4 border-b border-slate-700/80 bg-slate-900/80">
             <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-400/40 flex items-center justify-center text-xl">
+              <div class="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-400/40 flex items-center justify-center text-xl flex-shrink-0">
                 👥
               </div>
               <div>
-                <h3 class="text-lg font-bold text-white tracking-wide flex items-center gap-2">
+                <h3 class="text-base font-bold text-white tracking-wide flex items-center gap-2">
                   <span>半導體人才與廠務人資中心</span>
                   <span class="text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-mono border border-purple-500/30">
                     在職員工: ${state.staff.length} 人
@@ -115,48 +115,58 @@ export class HRModal {
               </div>
             </div>
 
-            <button id="btn-close-hr" class="w-8 h-8 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center font-mono text-base transition-colors">
+            <button id="btn-close-hr" class="w-8 h-8 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center font-mono text-base transition-colors" title="關閉人資中心">
               ✕
             </button>
           </div>
 
           <!-- Shift & Payroll Banner -->
-          <div class="px-6 py-3 bg-slate-950/70 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div class="px-6 py-3 bg-slate-950/70 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs flex-shrink-0">
             <div class="flex items-center gap-2">
               <span class="text-slate-400">廠區輪班機制:</span>
               <button
                 id="btn-toggle-shift"
                 class="px-3 py-1 rounded-lg font-semibold flex items-center gap-1.5 transition-all ${
                   globalShift === 'THREE_SHIFT'
-                    ? 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-600/50'
-                    : 'bg-amber-600/30 text-amber-300 border border-amber-500/40 hover:bg-amber-600/50'
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
+                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
                 }"
+                title="點擊切換兩班制/三班制"
               >
-                <span>${globalShift === 'THREE_SHIFT' ? '🟢 四班三輪 8H (三班制)' : '🔴 做二休二 12H (兩班制)'}</span>
+                <span>${globalShift === 'THREE_SHIFT' ? '🛡️ 三班制 (24H 在線 TPM 零故障)' : '⚡ 兩班制 (節省 33% 薪水，疲勞累積快)'}</span>
                 <span class="text-[10px] underline">點擊切換</span>
               </button>
-              <span class="text-[10px] text-slate-400">
-                ${globalShift === 'THREE_SHIFT' ? '🛡️ 疲勞穩定 <50，解鎖 TPM 零故障' : '⚠️ 薪資省 33%，但過勞有炸機風險'}
-              </span>
             </div>
 
-            <div class="text-right">
-              <span class="text-slate-400">月薪資總支出: </span>
-              <span class="font-mono font-bold text-amber-300 text-sm">NT$ ${totalPayroll.toLocaleString()}</span>
-              <span class="text-[10px] text-emerald-400 ml-1">(優先法律保障)</span>
+            <div class="flex items-center gap-4">
+              <div>
+                <span class="text-slate-400">每月薪資總額: </span>
+                <span class="font-mono font-bold text-amber-300">NT$ ${totalPayroll.toLocaleString()}</span>
+              </div>
             </div>
           </div>
 
-          <!-- Tabs -->
-          <div class="flex border-b border-slate-700/60 bg-slate-900/30 px-6 pt-2">
-            <button id="tab-staff" class="px-4 py-2.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 ${this.activeTab === 'STAFF' ? 'border-purple-400 text-purple-300' : 'border-transparent text-slate-400 hover:text-slate-200'}">
-              <span>🧑‍💼 廠內在職團隊</span>
-              <span class="px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] font-mono text-purple-400">${state.staff.length}</span>
+          <!-- Navigation Tabs -->
+          <div class="flex border-b border-slate-700/60 bg-slate-900/40 px-6 pt-2 flex-shrink-0">
+            <button
+              id="tab-staff"
+              class="px-4 py-2 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 ${
+                this.activeTab === 'STAFF' ? 'border-purple-400 text-purple-300' : 'border-transparent text-slate-400 hover:text-slate-200'
+              }"
+            >
+              <span>🧑‍🔬 現役廠務工程師</span>
+              <span class="px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] font-mono">${state.staff.length}</span>
             </button>
-            <button id="tab-market" class="px-4 py-2.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 ${this.activeTab === 'MARKET' ? 'border-purple-400 text-purple-300' : 'border-transparent text-slate-400 hover:text-slate-200'}">
-              <span>💼 人才招募市場</span>
-              <span class="px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] font-mono">${this.candidates.length}</span>
+            <button
+              id="tab-market"
+              class="px-4 py-2 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 ${
+                this.activeTab === 'MARKET' ? 'border-purple-400 text-purple-300' : 'border-transparent text-slate-400 hover:text-slate-200'
+              }"
+            >
+              <span>🤝 人才招募市場</span>
+              <span class="px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] font-mono text-purple-400">${this.candidates.length}</span>
             </button>
+
             ${this.activeTab === 'MARKET' ? `
               <button id="btn-refresh-candidates" class="ml-auto btn-sci-fi text-[11px] py-1 px-3 my-1">
                 🔄 刷新履歷池
@@ -165,11 +175,18 @@ export class HRModal {
           </div>
 
           <!-- Body -->
-          <div class="p-6 overflow-y-auto flex-1 space-y-4">
+          <div class="modal-body p-6 overflow-y-auto flex-1 space-y-4">
             ${this.activeTab === 'STAFF'
               ? this.renderStaffTab(state)
               : this.renderMarketTab(state)
             }
+          </div>
+
+          <!-- Footer with Return Button -->
+          <div class="modal-footer p-3 border-t border-slate-700/80 bg-slate-900/90 flex items-center justify-end px-6">
+            <button id="btn-back-hr" class="btn-sci-fi px-5 py-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 border-slate-600 text-white shadow-md">
+              ◀ 返回無塵室 (Back to Cleanroom)
+            </button>
           </div>
 
         </div>
@@ -341,10 +358,28 @@ export class HRModal {
     state: SaveGameV2,
     onUpdate: () => void
   ): void {
-    // 關閉
-    document.getElementById('btn-close-hr')?.addEventListener('click', () => {
+    const closeModal = () => {
       SoundEffects.playClick();
       container.innerHTML = '';
+      window.removeEventListener('keydown', onKeyDown);
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeModal();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+
+    // 關閉
+    document.getElementById('btn-close-hr')?.addEventListener('click', closeModal);
+    document.getElementById('btn-back-hr')?.addEventListener('click', closeModal);
+
+    // 點擊背景關閉
+    document.getElementById('modal-backdrop-hr')?.addEventListener('click', (e) => {
+      if (e.target === document.getElementById('modal-backdrop-hr')) {
+        closeModal();
+      }
     });
 
     // 分頁切換

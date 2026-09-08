@@ -87,15 +87,29 @@ export class MachinePanel {
 
     const isTrackChokePoint = isLitho && (pairedTrackIds.length === 0 || pairedTrackTotalCap < lithoBaseCap);
 
+    // 尋找當前正在該機台站點加工的在製批次
+    const activeLotsAtStation = state.activeLots.filter(l => {
+      if (l.status !== 'PROCESSING') return false;
+      if (machine.category === 'TRACK') {
+        return l.currentStation === 'LIT' && (l.litSubStep === 'COAT' || l.litSubStep === 'DEVELOP');
+      }
+      if (machine.category === 'LITHO') {
+        return l.currentStation === 'LIT' && l.litSubStep === 'EXPOSE';
+      }
+      return l.currentStation === machine.category;
+    });
+
+    const isProcessingNow = activeLotsAtStation.length > 0;
+
     container.innerHTML = `
-      <div class="modal-backdrop">
+      <div id="modal-backdrop-machine" class="modal-backdrop">
         <div class="modal-content glass-panel glass-panel-glow max-w-2xl max-h-[90vh] flex flex-col text-slate-100 p-0 overflow-hidden animate-fadeIn">
           
           <!-- Header -->
-          <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700/80 bg-slate-900/70">
+          <div class="modal-header flex items-center justify-between px-6 py-4 border-b border-slate-700/80 bg-slate-900/80">
             <div class="flex items-center gap-3">
-              <div class="w-12 h-12 rounded-xl bg-slate-950 border border-cyan-500/40 p-1 flex items-center justify-center overflow-hidden flex-shrink-0">
-                <img src="${assetPath}" alt="${machine.name}" class="w-full h-full object-contain filter drop-shadow" />
+              <div class="machine-panel-thumb w-14 h-14 rounded-xl bg-slate-950 border border-cyan-500/50 p-1 flex items-center justify-center overflow-hidden flex-shrink-0">
+                <img src="${assetPath}" alt="${machine.name}" class="w-full h-full object-contain filter drop-shadow" style="max-width: 52px; max-height: 52px;" />
               </div>
               <div>
                 <div class="flex items-center gap-2">
@@ -104,11 +118,11 @@ export class MachinePanel {
                     Tier ${machine.tier}
                   </span>
                   <span class="px-2 py-0.5 rounded text-[10px] font-mono ${
-                    machine.status === 'PROCESSING' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 animate-pulse' :
+                    isProcessingNow || machine.status === 'PROCESSING' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 animate-pulse' :
                     (machine.status === 'MAINTENANCE' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
                     (machine.status === 'EXPLODED' ? 'bg-red-600 text-white font-bold animate-bounce' : 'bg-slate-800 text-slate-300'))
                   }">
-                    ${machine.status}
+                    ${isProcessingNow ? '⚡ 加工中 (PROCESSING)' : machine.status}
                   </span>
                 </div>
                 <div class="text-xs text-slate-400 font-mono mt-0.5">
@@ -117,15 +131,70 @@ export class MachinePanel {
               </div>
             </div>
 
-            <button id="btn-close-machine-panel" class="w-8 h-8 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center font-mono text-base transition-colors">
+            <button id="btn-close-machine-panel" class="w-8 h-8 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center font-mono text-base transition-colors" title="關閉面板">
               ✕
             </button>
           </div>
 
           <!-- Body -->
-          <div class="p-6 overflow-y-auto flex-1 space-y-4 text-xs">
+          <div class="modal-body p-6 overflow-y-auto flex-1 space-y-4 text-xs">
 
-            <!-- Wear & Health Bar -->
+            <!-- 1. Equipment Description & Science Principles (半導體科普與機台說明) -->
+            <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
+              <div class="text-xs text-slate-200 font-medium leading-relaxed">
+                ${spec?.description || '廠內現役半導體晶圓製造專用設備。'}
+              </div>
+              ${spec?.scienceNote ? `
+                <div class="p-2.5 rounded-lg bg-cyan-950/30 border border-cyan-500/30 text-[11px] text-cyan-200/90 leading-relaxed">
+                  <span class="font-bold text-cyan-300">ℹ️ 半導體物理原理：</span>
+                  ${spec.scienceNote}
+                </div>
+              ` : ''}
+              <div class="grid grid-cols-2 gap-2 pt-1 font-mono text-[11px]">
+                <div class="p-2 rounded bg-slate-950/60 border border-slate-800/80 flex justify-between">
+                  <span class="text-slate-400">標準吞吐產能:</span>
+                  <span class="text-cyan-300 font-bold">${spec?.throughputWpm || 10} 晶圓/分</span>
+                </div>
+                <div class="p-2 rounded bg-slate-950/60 border border-slate-800/80 flex justify-between">
+                  <span class="text-slate-400">${machine.category === 'LITHO' ? 'Rayleigh 極限 CD:' : '製程站點:'}</span>
+                  <span class="text-emerald-400 font-bold">${spec?.rayleighLimitNm ? spec.rayleighLimitNm + ' nm' : machine.category}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. Live Production Job Status (即時生產在製狀態) -->
+            <div class="p-3.5 rounded-xl bg-slate-900/80 border ${isProcessingNow ? 'border-cyan-500/40 bg-cyan-950/20' : 'border-slate-800'} space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-white flex items-center gap-1.5">
+                  <span>⚙️</span>
+                  <span>生產加工狀態 (Production Status)</span>
+                </span>
+                <span class="font-mono text-xs ${isProcessingNow ? 'text-cyan-300 font-bold animate-pulse' : 'text-slate-400'}">
+                  ${isProcessingNow ? '⚡ 正在加工批次' : '待命中 (Ready / IDLE)'}
+                </span>
+              </div>
+              ${isProcessingNow ? `
+                <div class="space-y-1.5 pt-1 font-mono text-xs">
+                  ${activeLotsAtStation.map(lot => `
+                    <div class="p-2.5 rounded-lg bg-slate-950/80 border border-cyan-500/30 flex items-center justify-between">
+                      <div>
+                        <span class="text-cyan-300 font-bold">${lot.lotId}</span>
+                        <span class="text-[11px] text-slate-400 ml-2">第 ${lot.currentLayer}/${lot.totalLayers} 層 [${lot.currentStation}${lot.litSubStep ? ' - ' + lot.litSubStep : ''}]</span>
+                      </div>
+                      <div class="text-emerald-400 font-bold">
+                        良率 ${(lot.yieldMultiplier * 100).toFixed(0)}%
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : `
+                <div class="text-[11px] text-slate-400 py-1">
+                  目前無正在加工的晶圓批次，機台妥善待命中。請至「合約」承接訂單投片！
+                </div>
+              `}
+            </div>
+
+            <!-- 3. Wear & Health Bar -->
             <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
               <div class="flex items-center justify-between font-mono">
                 <span class="text-slate-400 flex items-center gap-1.5">
@@ -162,7 +231,7 @@ export class MachinePanel {
               ` : ''}
             </div>
 
-            <!-- Litho Specific Optical Rayleigh Details -->
+            <!-- 4. Litho Specific Optical Rayleigh Details -->
             ${isLitho && k1Report ? `
               <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
                 <div class="flex items-center justify-between font-mono">
@@ -189,7 +258,7 @@ export class MachinePanel {
               </div>
             ` : ''}
 
-            <!-- Option B: LITHO Paired Track Selection (Breakthrough Choke Point) -->
+            <!-- 5. Option B: Paired Track Selection -->
             ${isLitho ? `
               <div class="p-3.5 rounded-xl bg-slate-900/80 border ${isTrackChokePoint ? 'border-amber-500/40' : 'border-slate-800'} space-y-3">
                 <div class="flex items-center justify-between">
@@ -248,7 +317,7 @@ export class MachinePanel {
               </div>
             ` : ''}
 
-            <!-- Station Engineer Assignment -->
+            <!-- 6. Station Engineer Assignment -->
             <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2.5">
               <div class="flex items-center justify-between">
                 <span class="font-bold text-white flex items-center gap-1.5">
@@ -272,7 +341,7 @@ export class MachinePanel {
               </select>
             </div>
 
-            <!-- Action Buttons -->
+            <!-- 7. Machine Maintenance Actions -->
             <div class="flex items-center gap-3 pt-2">
               <button
                 id="btn-machine-overhaul"
@@ -292,6 +361,13 @@ export class MachinePanel {
 
           </div>
 
+          <!-- Footer: Clear Return / Back Button -->
+          <div class="modal-footer p-4 border-t border-slate-700/80 bg-slate-900/90 flex items-center gap-3">
+            <button id="btn-back-machine" class="btn-sci-fi w-full justify-center py-2.5 text-xs font-bold bg-slate-800 hover:bg-slate-700 border-slate-600 text-white shadow-lg">
+              ◀ 返回無塵室 (Back to Cleanroom)
+            </button>
+          </div>
+
         </div>
       </div>
     `;
@@ -305,10 +381,30 @@ export class MachinePanel {
     state: SaveGameV2,
     onUpdate: () => void
   ): void {
-    // 關閉
-    document.getElementById('btn-close-machine-panel')?.addEventListener('click', () => {
+    const closeModal = () => {
       SoundEffects.playClick();
       container.innerHTML = '';
+      window.removeEventListener('keydown', onKeyDown);
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeModal();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+
+    // 關閉按鈕
+    document.getElementById('btn-close-machine-panel')?.addEventListener('click', closeModal);
+
+    // 底部返回按鈕
+    document.getElementById('btn-back-machine')?.addEventListener('click', closeModal);
+
+    // 點擊背景空白處關閉
+    document.getElementById('modal-backdrop-machine')?.addEventListener('click', (e) => {
+      if (e.target === document.getElementById('modal-backdrop-machine')) {
+        closeModal();
+      }
     });
 
     // 勾選並聯 Track (Option B)

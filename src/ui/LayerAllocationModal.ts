@@ -64,11 +64,11 @@ export class LayerAllocationModal {
     const nodeStr = order.nodeNm >= 1000 ? `${order.nodeNm / 1000} µm` : `${order.nodeNm} nm`;
 
     container.innerHTML = `
-      <div class="modal-backdrop">
+      <div id="modal-backdrop-layer" class="modal-backdrop">
         <div class="modal-content glass-panel glass-panel-glow max-w-4xl text-slate-100 flex flex-col max-h-[90vh]">
           
           <!-- Modal Header -->
-          <div class="flex items-center justify-between pb-3 border-b border-slate-700/80">
+          <div class="modal-header flex items-center justify-between pb-3 border-b border-slate-700/80">
             <div class="flex items-center gap-3">
               <div class="w-10 h-10 rounded-xl bg-indigo-950/80 border border-indigo-500/50 flex items-center justify-center text-xl shadow-inner">
                 🎛️
@@ -88,13 +88,13 @@ export class LayerAllocationModal {
               </div>
             </div>
 
-            <button id="btn-close-layer-modal" class="text-slate-400 hover:text-white font-mono text-xl p-1">
+            <button id="btn-close-layer-modal" class="text-slate-400 hover:text-white font-mono text-xl p-1" title="關閉">
               ✕
             </button>
           </div>
 
           <!-- 半導體科普導讀卡片 -->
-          <div class="my-3 p-3 rounded-xl bg-slate-900/90 border border-indigo-500/30 flex items-start gap-3 text-xs">
+          <div class="my-3 p-3 rounded-xl bg-slate-900/90 border border-indigo-500/30 flex items-start gap-3 text-xs flex-shrink-0">
             <span class="text-xl">💡</span>
             <div class="text-slate-300 leading-relaxed">
               <span class="text-indigo-300 font-bold">半導體產業秘密：</span>
@@ -104,7 +104,7 @@ export class LayerAllocationModal {
           </div>
 
           <!-- 配方分層列表清單 (可滾動) -->
-          <div class="flex-1 overflow-y-auto pr-1 space-y-2.5 my-2">
+          <div class="modal-body flex-1 overflow-y-auto pr-1 space-y-2.5 my-2">
             ${this.localAllocations.map((alloc) => {
               const assignedCD = machineCDMap.get(alloc.assignedMachineModelId) ?? 99999;
               const isViolated = assignedCD > alloc.targetCD;
@@ -205,10 +205,24 @@ export class LayerAllocationModal {
     const close = () => {
       SoundEffects.playClick();
       container.innerHTML = '';
+      window.removeEventListener('keydown', onKeyDown);
     };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        close();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
 
     document.getElementById('btn-close-layer-modal')?.addEventListener('click', close);
     document.getElementById('btn-cancel-layer-alloc')?.addEventListener('click', close);
+
+    document.getElementById('modal-backdrop-layer')?.addEventListener('click', (e) => {
+      if (e.target === document.getElementById('modal-backdrop-layer')) {
+        close();
+      }
+    });
 
     // 下拉選單變更機台指派
     const selects = container.querySelectorAll<HTMLSelectElement>('.sel-layer-machine');

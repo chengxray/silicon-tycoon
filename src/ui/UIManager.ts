@@ -67,6 +67,57 @@ export class UIManager {
 
   public render(): void {
     this.topHUD.render(this.state);
+    this.renderProductionTicker();
+  }
+
+  private renderProductionTicker(): void {
+    const container = document.getElementById('hud-widgets');
+    if (!container) return;
+
+    const activeLots = this.state.activeLots.filter((l) => l.status === 'PROCESSING');
+    if (activeLots.length === 0) {
+      if (this.state.activeOrders.length === 0) {
+        container.innerHTML = `
+          <div id="hud-production-ticker" title="目前無在製訂單，點擊前往合約板承接新訂單">
+            <span class="text-amber-400">📋</span>
+            <span class="text-slate-300 font-medium">產線待命中 — 點擊合約板承接新訂單</span>
+          </div>
+        `;
+      } else {
+        container.innerHTML = `
+          <div id="hud-production-ticker" class="border-emerald-500/60" title="所有批次已加工完畢，點擊進行出貨結算">
+            <span class="text-emerald-400 animate-bounce">📦</span>
+            <span class="text-emerald-300 font-bold">晶圓已完工！點此進行出貨結算尾款</span>
+          </div>
+        `;
+      }
+    } else {
+      // 統計站點進度
+      const stationMap: Record<string, number> = {};
+      for (const lot of activeLots) {
+        const st = lot.currentStation === 'LIT' ? `LIT(${lot.litSubStep || 'COAT'})` : lot.currentStation;
+        stationMap[st] = (stationMap[st] || 0) + 1;
+      }
+      const stationDetails = Object.entries(stationMap)
+        .map(([st, cnt]) => `${st}: ${cnt}批`)
+        .join(' | ');
+
+      container.innerHTML = `
+        <div id="hud-production-ticker" title="點擊檢視在製訂單與批次進度">
+          <span class="animate-spin text-cyan-400">⚙️</span>
+          <span class="font-bold text-white">生產進行中:</span>
+          <span class="text-cyan-300 font-mono font-bold">${activeLots.length} 批在製</span>
+          <span class="text-slate-500">|</span>
+          <span class="text-amber-300 font-mono text-[11px]">${stationDetails}</span>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-cyan-900/60 text-cyan-200 border border-cyan-500/30">查看訂單</span>
+        </div>
+      `;
+    }
+
+    document.getElementById('hud-production-ticker')?.addEventListener('click', () => {
+      SoundEffects.playClick();
+      this.openContracts();
+    });
   }
 
   public openContracts(): void {
@@ -137,18 +188,32 @@ export class UIManager {
     const container = document.getElementById('modal-container');
     if (!container) return;
 
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        container.innerHTML = '';
+        window.removeEventListener('keydown', handleKeyDown);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    const closeModal = () => {
+      SoundEffects.playClick();
+      container.innerHTML = '';
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+
     container.innerHTML = `
-      <div class="modal-backdrop">
-        <div class="modal-content glass-panel glass-panel-glow max-w-lg text-slate-100">
-          <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-700">
+      <div id="modal-backdrop-save" class="modal-backdrop">
+        <div class="modal-content glass-panel glass-panel-glow max-w-lg text-slate-100 flex flex-col max-h-[88vh]">
+          <div class="modal-header flex items-center justify-between pb-3 border-b border-slate-700 flex-shrink-0">
             <h3 class="text-base font-bold flex items-center gap-2">
               <span>💾</span>
               <span>存檔備份與 JSON 匯出/匯入</span>
             </h3>
-            <button id="btn-close-save-modal" class="text-slate-400 hover:text-white font-mono text-lg">✕</button>
+            <button id="btn-close-save-modal" class="text-slate-400 hover:text-white font-mono text-lg transition-colors">✕</button>
           </div>
 
-          <div class="space-y-3 text-xs text-slate-300">
+          <div class="modal-body overflow-y-auto flex-1 py-4 space-y-3 text-xs text-slate-300">
             <p>
               遊戲預設每 10 秒自動保存至瀏覽器 LocalStorage。您亦可隨時手動匯出備份檔案。
             </p>
@@ -163,13 +228,24 @@ export class UIManager {
               <input type="file" id="file-import-save" accept=".json" class="hidden" />
             </div>
           </div>
+
+          <div class="modal-footer flex items-center justify-between pt-3 border-t border-slate-700 flex-shrink-0">
+            <span class="text-xs text-slate-400 font-mono">按 ESC 或點擊外部背景亦可返回</span>
+            <button id="btn-return-save" class="btn-sci-fi px-4 py-1.5 text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700">
+              ◀ 返回無塵室
+            </button>
+          </div>
         </div>
       </div>
     `;
 
-    document.getElementById('btn-close-save-modal')?.addEventListener('click', () => {
-      SoundEffects.playClick();
-      container.innerHTML = '';
+    document.getElementById('btn-close-save-modal')?.addEventListener('click', closeModal);
+    document.getElementById('btn-return-save')?.addEventListener('click', closeModal);
+
+    document.getElementById('modal-backdrop-save')?.addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) {
+        closeModal();
+      }
     });
 
     document.getElementById('btn-export-save')?.addEventListener('click', () => {

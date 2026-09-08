@@ -197,12 +197,12 @@ export class TutorialOverlay {
           </div>
 
           <!-- Step Content Body -->
-          <div class="text-xs text-slate-300 space-y-3 pb-4">
+          <div class="modal-body text-xs text-slate-300 space-y-3 pb-4 max-h-[60vh] overflow-y-auto pr-1">
             ${cur.content}
           </div>
 
           <!-- Bottom Action Buttons -->
-          <div class="pt-3 border-t border-slate-800 flex items-center justify-between">
+          <div class="pt-3 border-t border-slate-800 flex items-center justify-between flex-shrink-0">
             <button id="btn-skip-tutorial-all" class="text-xs text-slate-500 hover:text-slate-300 transition-colors">
               跳過全部教學
             </button>
@@ -241,6 +241,14 @@ export class TutorialOverlay {
 
     document.getElementById('btn-close-tutorial')?.addEventListener('click', close);
     document.getElementById('btn-skip-tutorial-all')?.addEventListener('click', close);
+
+    // Backdrop click
+    const backdrop = container.querySelector('.modal-backdrop');
+    backdrop?.addEventListener('click', (e) => {
+      if (e.target === backdrop) {
+        close();
+      }
+    });
 
     // 上一步
     document.getElementById('btn-tutorial-prev')?.addEventListener('click', () => {
