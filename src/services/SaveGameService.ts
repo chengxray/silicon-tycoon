@@ -14,6 +14,7 @@ import {
 } from '../types';
 import { MaintenanceEngine } from '../engine/MaintenanceEngine';
 import { AchievementEngine } from '../engine/AchievementEngine';
+import { ProductionEngine } from '../engine/ProductionEngine';
 import { FinanceEngine } from '../engine/FinanceEngine';
 import { EconomyEngine } from '../engine/EconomyEngine';
 
@@ -41,7 +42,7 @@ export class SaveGameService {
    */
   public static createDefaultSave(companyName = '矽島先進半導體', ceoName = '張創辦人', avatarId = 'avatar_1'): SaveGameV2 {
     const now = Date.now();
-    return {
+    const defaultSave: SaveGameV2 = {
       schemaVersion: 2,
       savedAt: now,
       lastOnlineTimestamp: now,
@@ -170,6 +171,9 @@ export class SaveGameService {
       marketOrders: EconomyEngine.generateContractBoard(1, null, 0),
       nextOrderRespawnTime: 0
     };
+
+    ProductionEngine.updateMachineNames(defaultSave.machines);
+    return defaultSave;
   }
 
   public static readonly REGISTRY_KEY = 'SILICON_TYCOON_USERS_REGISTRY';
@@ -446,6 +450,15 @@ export class SaveGameService {
             if (parsed.player.totalOrdersFulfilled === undefined) parsed.player.totalOrdersFulfilled = 0;
             if (parsed.player.totalWafersDelivered === undefined) parsed.player.totalWafersDelivered = 0;
             if (parsed.player.rdInvestedCash === undefined) parsed.player.rdInvestedCash = 0;
+          }
+          if (parsed.machines) {
+            ProductionEngine.updateMachineNames(parsed.machines);
+          }
+          if (parsed.rollingYieldHistory && parsed.rollingYieldHistory.length > 0) {
+            // 若先前的存檔歷史卡在全是 1.0 (受先前未結算良率 bug 影響)，重置為逼真動態良率
+            if (parsed.rollingYieldHistory.every((y: number) => y >= 0.999)) {
+              parsed.rollingYieldHistory = [0.918, 0.935, 0.902, 0.927, 0.921];
+            }
           }
           EconomyEngine.ensureMarketOrders(parsed as SaveGameV2);
           return parsed as SaveGameV2;

@@ -264,6 +264,9 @@ export class CleanroomScene extends Phaser.Scene {
    * 渲染全廠機台 (含等角深度排序 Depth Sorting 與互動點擊)
    */
   public renderMachines(): void {
+    // 確保同型號多機台編號標註更新 (#1, #2...)
+    ProductionEngine.updateMachineNames(this.saveGame.machines);
+
     // 清理已不存在於當前存檔的舊機台 (例如更換帳號、報廢變賣)
     const validIds = new Set(this.saveGame.machines.map((m) => m.id));
     for (const [id, entry] of this.machineMap) {

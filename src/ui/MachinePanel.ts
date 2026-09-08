@@ -522,6 +522,7 @@ export class MachinePanel {
       const idx = state.machines.findIndex(m => m.id === machine.id);
       if (idx !== -1) {
         state.machines.splice(idx, 1);
+        ProductionEngine.updateMachineNames(state.machines);
       }
 
       state.player.cash += resellPrice;

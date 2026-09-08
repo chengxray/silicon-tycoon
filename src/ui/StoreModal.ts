@@ -10,6 +10,7 @@ import { SaveGameV2, MachineCategory, MachineData } from '../types';
 import { ASSET_REGISTRY } from '../services/AssetRegistry';
 import { SoundEffects } from '../audio/SoundEffects';
 import { AchievementEngine } from '../engine/AchievementEngine';
+import { ProductionEngine } from '../engine/ProductionEngine';
 import { FinanceEngine } from '../engine/FinanceEngine';
 import { TechTreeModal } from './TechTreeModal';
 import { SaveGameService } from '../services/SaveGameService';
@@ -812,6 +813,7 @@ export class StoreModal {
         };
 
         state.machines.push(newMachine);
+        ProductionEngine.updateMachineNames(state.machines);
 
         // 成就檢核
         AchievementEngine.checkAchievements(state);

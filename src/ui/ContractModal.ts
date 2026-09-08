@@ -14,6 +14,7 @@ import { SoundEffects } from '../audio/SoundEffects';
 import { RayleighEngine } from '../engine/RayleighEngine';
 import { AchievementEngine } from '../engine/AchievementEngine';
 import { FinanceEngine } from '../engine/FinanceEngine';
+import { YieldEngine } from '../engine/YieldEngine';
 import { SaveGameService } from '../services/SaveGameService';
 import { WaferMapModal } from './WaferMapModal';
 import { LayerAllocationModal } from './LayerAllocationModal';
@@ -508,6 +509,22 @@ export class ContractModal {
 
         // 3. 建立對應的 WaferLotData 批次投入產線
         const lotCount = Math.max(1, Math.min(3, Math.ceil(order.totalDies / 1000)));
+        const initialYield = YieldEngine.calculateLotYield(
+          {
+            lotId: '',
+            orderId: order.id,
+            waferCount: 25,
+            currentStation: 'FILM',
+            currentLayer: 1,
+            totalLayers: order.layerCount,
+            qTimeDeadline: null,
+            yieldMultiplier: 1.0,
+            status: 'PROCESSING'
+          },
+          state,
+          order
+        );
+
         for (let i = 0; i < lotCount; i++) {
           const lot: WaferLotData = {
             lotId: `LOT-${Date.now().toString(36).toUpperCase().slice(-4)}-${i + 1}`,
@@ -517,7 +534,7 @@ export class ContractModal {
             currentLayer: 1,
             totalLayers: order.layerCount,
             qTimeDeadline: null,
-            yieldMultiplier: 1.0,
+            yieldMultiplier: initialYield,
             status: 'PROCESSING',
             stationProgressSeconds: 0,
             stationRequiredSeconds: ProductionEngine.getStationRequiredSeconds('FILM')

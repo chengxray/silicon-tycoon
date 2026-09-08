@@ -3,7 +3,8 @@
  * 負責層良率連乘、1.9 節權威 5 筆滑動窗口 RollingYieldIndex 追蹤與蒙地卡羅同心圓缺陷晶圓圖生成
  */
 
-import { WaferLotData } from '../types';
+import { WaferLotData, SaveGameV2, OrderData } from '../types';
+import { RayleighEngine } from './RayleighEngine';
 
 export interface DieResult {
   index: number;
@@ -65,6 +66,95 @@ export class YieldEngine {
     cumulativeYield *= (lot.yieldMultiplier || 1.0);
 
     return Number(Math.max(0, Math.min(1.0, cumulativeYield)).toFixed(4));
+  }
+
+  /**
+   * 實時綜合計算晶圓批次真實良率 (0.0 ~ 1.0)
+   * 整合：
+   * 1. 白光/黃光區違規判定 (違反直接 0.0)
+   * 2. 無塵室潔淨室等級基底單層良率 (Class 10000 ~ ISO 1)
+   * 3. 廠內運轉機台平均磨損顆粒折損 (Machine Wear Loss)
+   * 4. 在線值勤工程師資歷調校紅利與過勞失誤 (Staff Skill / Fatigue)
+   * 5. 微影光學極限製程視窗懲罰 (Rayleigh k1 Process Window Penalty)
+   * 6. Q-Time 逾時懲罰
+   * 7. 蒙地卡羅物理擾動 (±1.2%)
+   */
+  public static calculateLotYield(
+    lot: WaferLotData,
+    state: SaveGameV2,
+    order?: OrderData
+  ): number {
+    if (lot.hasYellowRoomViolation || lot.yieldMultiplier === 0.0) {
+      return 0.0;
+    }
+
+    const totalLayers = Math.max(1, lot.totalLayers || (order ? order.layerCount : 6));
+
+    // 1. 無塵室潔淨室等級基底單層良率 (Cleanroom Class Layer Yield)
+    let cleanroomLayerFactor = 0.988; // Class 10000 基準
+    const crClass = state.player.unlockedCleanroomClass;
+    if (crClass === 'Class 1000') cleanroomLayerFactor = 0.992;
+    else if (crClass === 'Class 100') cleanroomLayerFactor = 0.995;
+    else if (crClass === 'Class 10') cleanroomLayerFactor = 0.997;
+    else if (crClass === 'Class 1') cleanroomLayerFactor = 0.9985;
+    else if (crClass === 'ISO 1') cleanroomLayerFactor = 0.9992;
+
+    // 2. 相關加工機台平均磨損折損 (Machine Wear Defect Loss)
+    const activeMachines = state.machines.filter(m => m.status !== 'EXPLODED');
+    let avgWear = 0;
+    if (activeMachines.length > 0) {
+      avgWear = activeMachines.reduce((sum, m) => sum + m.wear, 0) / activeMachines.length;
+    }
+    const wearPenalty = (avgWear / 100) * 0.06;
+
+    // 3. 在線值勤工程師專長與調校紅利 (Staff Skill & Fatigue)
+    let staffBonus = 0;
+    const workingStaff = state.staff.filter(s => s.workShift !== 'OFF');
+    for (const staff of workingStaff) {
+      if (staff.fatigue >= 80) {
+        staffBonus -= 0.015; // 過勞失誤
+      } else {
+        if (staff.rank === 'Young Specialist') staffBonus += 0.005;
+        else if (staff.rank === 'Skilled Worker') staffBonus += 0.010;
+        else if (staff.rank === 'Senior Engineer') staffBonus += 0.018;
+        else if (staff.rank === 'Fellow') staffBonus += 0.025;
+      }
+    }
+    staffBonus = Math.max(-0.05, Math.min(0.06, staffBonus));
+
+    // 4. 微影光學極限製程視窗懲罰 (Rayleigh Optical Process Window)
+    let opticalPenalty = 0;
+    const lithoMachine = state.machines.find(m => m.category === 'LITHO' && m.status !== 'EXPLODED');
+    if (lithoMachine) {
+      const engineer = lithoMachine.assignedEngineerId
+        ? state.staff.find(s => s.id === lithoMachine.assignedEngineerId)
+        : null;
+      const { effectiveK1 } = RayleighEngine.calculateEffectiveK1(
+        state.unlockedFeatures.cmp ? 'CAR' : 'BASE',
+        lithoMachine.wear,
+        engineer
+      );
+      opticalPenalty = RayleighEngine.getProcessWindowPenalty(effectiveK1);
+    }
+
+    // 5. 多層微影連乘計算 (Multi-layer Cumulative Yield)
+    const effectiveLayerYield = Math.max(0.95, cleanroomLayerFactor - (wearPenalty / totalLayers));
+    let baseCumulativeYield = Math.pow(effectiveLayerYield, Math.min(12, totalLayers));
+
+    // 疊加工程師調校紅利與微影視窗折損
+    let finalYield = baseCumulativeYield + staffBonus - opticalPenalty;
+
+    // 6. Q-Time 懲罰 (若該批次曾有逾期扣減)
+    if (lot.yieldMultiplier < 0.99 && lot.yieldMultiplier > 0.0) {
+      finalYield *= lot.yieldMultiplier;
+    }
+
+    // 7. 蒙地卡羅物理天然擾動 (Natural Process Fluctuation ±1.2%)
+    const noise = (Math.random() - 0.5) * 0.024;
+    finalYield += noise;
+
+    // 8. 封頂與保底：正常製程落於 70% ~ 97.5% 之間
+    return Number(Math.max(0.65, Math.min(0.978, finalYield)).toFixed(3));
   }
 
   /**

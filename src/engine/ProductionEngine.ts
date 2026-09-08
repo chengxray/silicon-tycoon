@@ -700,4 +700,36 @@ export class ProductionEngine {
 
     return allocations;
   }
+
+  /**
+   * 同型號機台命名維護：
+   * 當廠內同一型號 (modelId) 的機台不只一台時，於名稱後標記編號 (#1, #2...)；
+   * 若該型號僅有一台，則保持原始乾淨名稱。
+   */
+  public static updateMachineNames(machines: MachineData[]): void {
+    if (!machines || machines.length === 0) return;
+
+    const modelGroups = new Map<string, MachineData[]>();
+    for (const m of machines) {
+      if (!modelGroups.has(m.modelId)) {
+        modelGroups.set(m.modelId, []);
+      }
+      modelGroups.get(m.modelId)!.push(m);
+    }
+
+    for (const [_modelId, group] of modelGroups.entries()) {
+      if (group.length <= 1) {
+        // 僅有一台：移除後綴 (#1, #2 等)
+        for (const m of group) {
+          m.name = m.name.replace(/\s*#\d+$/, '').trim();
+        }
+      } else {
+        // 多於一台：依序標註 #1, #2, #3...
+        group.forEach((m, idx) => {
+          const baseName = m.name.replace(/\s*#\d+$/, '').trim();
+          m.name = `${baseName} #${idx + 1}`;
+        });
+      }
+    }
+  }
 }

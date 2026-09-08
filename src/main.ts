@@ -15,6 +15,7 @@ import { MaintenanceEngine } from './engine/MaintenanceEngine';
 import { ProductionEngine } from './engine/ProductionEngine';
 import { EconomyEngine } from './engine/EconomyEngine';
 import { FinanceEngine } from './engine/FinanceEngine';
+import { YieldEngine } from './engine/YieldEngine';
 import { DevConsole } from './ui/DevConsole';
 import { MachinePanel } from './ui/MachinePanel';
 import { MachineData, OrderData } from './types';
@@ -209,7 +210,10 @@ class FoundryGame {
               lot.status = 'COMPLETED';
               if (order) {
                 const lotsForOrder = this.state.activeLots.filter((l) => l.orderId === order.id);
-                // 若遭受黃光區違規或白光污染，良率已被強制歸零 (0.0)
+                // 若遭受黃光區違規或白光污染，良率已被強制歸零 (0.0)；否則依據無塵室潔淨度、機台磨損與工程師資歷動態計算真實良率
+                if (!lot.hasYellowRoomViolation && lot.yieldMultiplier !== 0.0) {
+                  lot.yieldMultiplier = YieldEngine.calculateLotYield(lot, this.state, order);
+                }
                 const diesInLot = Math.round((order.totalDies / Math.max(1, lotsForOrder.length)) * lot.yieldMultiplier);
                 order.goodDiesDelivered = Math.min(order.totalDies, order.goodDiesDelivered + diesInLot);
 

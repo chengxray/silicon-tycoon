@@ -64,8 +64,9 @@ export class WaferMapModal {
     const defocusCount = this.dies.filter(d => d.defectType === 'OPTICAL_DEFOCUS').length;
 
     const isProducing = state.activeLots.some(l => l.status === 'PROCESSING') || state.machines.some(m => m.status === 'PROCESSING');
-    const rollingYield = state.rollingYieldHistory.length > 0
-      ? (state.rollingYieldHistory.reduce((a, b) => a + b, 0) / state.rollingYieldHistory.length * 100).toFixed(1) + '%'
+    const recent5 = state.rollingYieldHistory.slice(-5);
+    const rollingYield = recent5.length > 0
+      ? (recent5.reduce((a, b) => a + b, 0) / recent5.length * 100).toFixed(1) + '%'
       : 'N/A';
 
     container.innerHTML = `

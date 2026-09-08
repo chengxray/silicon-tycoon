@@ -161,8 +161,8 @@ export class TopHUD {
             <span class="text-[10px] text-cyan-400">🔍</span>
           </div>
           <div class="flex items-center gap-1 justify-center">
-            <span id="hud-yield-value" class="text-sm font-bold font-mono whitespace-nowrap">100.0%</span>
-            <span id="hud-yield-sub" class="text-[10px] whitespace-nowrap">(1.00x)</span>
+            <span id="hud-yield-value" class="text-sm font-bold font-mono whitespace-nowrap">N/A</span>
+            <span id="hud-yield-sub" class="text-[10px] whitespace-nowrap text-amber-400/90 font-medium">(待命暫停)</span>
           </div>
         </button>
 
