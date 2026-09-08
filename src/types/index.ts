@@ -100,6 +100,8 @@ export interface OrderData {
   deadlineGameTime: number;
   status: OrderStatus;
   layerAllocations?: LayerAllocation[];
+  allowedDurationSec?: number;
+  marketExpiresAt?: number;
 }
 
 export interface WaferLotData {

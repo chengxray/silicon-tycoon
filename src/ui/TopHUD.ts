@@ -115,7 +115,7 @@ export class TopHUD {
     this.container.innerHTML = `
       <!-- 左側：創辦人與公司資訊 (附帶 PvZ 1 經典使用者登入切換與現實日曆同步) -->
       <div class="flex items-center gap-2.5 flex-shrink-0 whitespace-nowrap">
-        <div id="btn-hud-profile-avatar" class="w-10 h-10 rounded-full border border-cyan-400/50 bg-slate-800 flex items-center justify-center text-xl shadow-inner cursor-pointer hover:border-amber-400 hover:scale-105 transition-all" title="點擊切換存檔 / 登入使用者 (PvZ 1 Style)">
+        <div id="btn-hud-profile-avatar" class="w-10 h-10 rounded-full border border-cyan-400/50 bg-slate-800 flex items-center justify-center text-xl shadow-inner cursor-pointer hover:border-amber-400 hover:scale-105 transition-all" title="點擊切換存檔 / 登入使用者">
           👤
         </div>
         <div>
@@ -270,9 +270,9 @@ export class TopHUD {
             <button id="menu-item-switch-user" class="w-full px-4 py-2.5 text-left hover:bg-slate-800/90 rounded-xl flex items-center justify-between transition-colors cursor-pointer group mx-auto">
               <span class="flex items-center gap-3 font-semibold text-slate-200 group-hover:text-white">
                 <span class="text-lg">👤</span>
-                <span class="text-sm">切換玩家 (Who are you?)</span>
+                <span class="text-sm">切換玩家帳號 (Who are you?)</span>
               </span>
-              <span class="text-xs text-cyan-400 font-mono">PvZ 1 Style</span>
+              <span class="text-xs text-slate-400 font-mono">存檔</span>
             </button>
 
             <!-- 存檔與備份 -->

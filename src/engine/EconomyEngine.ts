@@ -238,6 +238,10 @@ export class EconomyEngine {
     const allowedTime = Math.round((layerCount * secondsPerLayer * waferCount * 0.8) / urgencyMultiplier + 180);
     const deadlineGameTime = currentGameTime + allowedTime;
 
+    // 市場報價等待時效：超急件 45 秒、急件 70 秒、常規件 100 秒
+    const waitingMs = urgencyMultiplier >= 1.5 ? 45_000 : (urgencyMultiplier >= 1.2 ? 70_000 : 100_000);
+    const marketExpiresAt = Date.now() + waitingMs;
+
     return {
       id: `ORD-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 900 + 100)}`,
       clientName: client,
@@ -248,9 +252,24 @@ export class EconomyEngine {
       nrePaid,
       unitPrice,
       urgencyMultiplier,
+      allowedDurationSec: allowedTime,
+      marketExpiresAt,
       deadlineGameTime,
       status: 'ACTIVE'
     };
+  }
+
+  /**
+   * 取得合約訂單的約定交付工期 (秒)
+   */
+  public static getAllowedDurationSec(order: OrderData): number {
+    if (order.allowedDurationSec && order.allowedDurationSec > 0) {
+      return order.allowedDurationSec;
+    }
+    const waferCount = Math.max(1, Math.ceil(order.totalDies / (order.nodeNm >= 1000 ? 500 : 2000)));
+    const secondsPerLayer = 30;
+    const urgency = order.urgencyMultiplier || 1.0;
+    return Math.round(((order.layerCount || 4) * secondsPerLayer * waferCount * 0.8) / urgency + 180);
   }
 
   /**
@@ -321,6 +340,39 @@ export class EconomyEngine {
     }
 
     return false;
+  }
+
+  /**
+   * 檢查市場訂單池中個別訂單的等待時效：若逾時未簽約，自動刷新該筆訂單
+   */
+  public static checkMarketOrdersExpiry(state: SaveGameV2): boolean {
+    if (!state.marketOrders || state.marketOrders.length === 0) {
+      return false;
+    }
+    const now = Date.now();
+    let hasChanges = false;
+    const rollingYield = state.rollingYieldHistory && state.rollingYieldHistory.length > 0
+      ? state.rollingYieldHistory.reduce((a, b) => a + b, 0) / state.rollingYieldHistory.length
+      : null;
+
+    for (let i = 0; i < state.marketOrders.length; i++) {
+      const order = state.marketOrders[i];
+      // 若無 marketExpiresAt，給予初始化
+      if (!order.marketExpiresAt) {
+        const waitingMs = (order.urgencyMultiplier || 1.0) >= 1.5 ? 45_000 : ((order.urgencyMultiplier || 1.0) >= 1.2 ? 70_000 : 100_000);
+        order.marketExpiresAt = now + waitingMs;
+        continue;
+      }
+
+      // 若等待時間已過
+      if (now >= order.marketExpiresAt) {
+        // 逾時未簽約，該客戶轉向其他代工廠，市場端自動刷新為全新合約！
+        state.marketOrders[i] = this.generateSingleOrder(state.player.foundryTier, rollingYield, state.gameTime, i);
+        hasChanges = true;
+      }
+    }
+
+    return hasChanges;
   }
 
   /**

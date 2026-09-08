@@ -460,6 +460,29 @@ export class SaveGameService {
               parsed.rollingYieldHistory = [0.918, 0.935, 0.902, 0.927, 0.921];
             }
           }
+          if (parsed.marketOrders) {
+            const now = Date.now();
+            for (const ord of parsed.marketOrders) {
+              if (!ord.allowedDurationSec) {
+                ord.allowedDurationSec = EconomyEngine.getAllowedDurationSec(ord);
+              }
+              if (!ord.marketExpiresAt || ord.marketExpiresAt <= now) {
+                const waitMs = (ord.urgencyMultiplier || 1.0) >= 1.5 ? 45_000 : ((ord.urgencyMultiplier || 1.0) >= 1.2 ? 70_000 : 100_000);
+                ord.marketExpiresAt = now + waitMs;
+              }
+            }
+          }
+          if (parsed.activeOrders) {
+            for (const ord of parsed.activeOrders) {
+              if (!ord.allowedDurationSec) {
+                ord.allowedDurationSec = EconomyEngine.getAllowedDurationSec(ord);
+              }
+              // 若曾因 0 秒 bug 導致在製訂單 deadlineGameTime 過期且尚未交付完畢，自動給予合理補償時限
+              if (ord.deadlineGameTime <= (parsed.gameTime || 0) && ord.goodDiesDelivered < ord.totalDies) {
+                ord.deadlineGameTime = (parsed.gameTime || 0) + ord.allowedDurationSec;
+              }
+            }
+          }
           EconomyEngine.ensureMarketOrders(parsed as SaveGameV2);
           return parsed as SaveGameV2;
         }

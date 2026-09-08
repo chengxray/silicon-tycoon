@@ -221,18 +221,27 @@ export class ContractModal {
                 </div>
               </div>
 
-              <!-- Litho CD warning or ready -->
+              <!-- Delivery Duration & Market Expiration Countdown -->
+              <div class="flex items-center justify-between text-[11px] p-2 rounded bg-slate-950/40 border border-slate-800/60">
+                <div class="flex items-center gap-1 text-slate-400" title="簽約接單後承諾之總生產交付時間">
+                  <span>⏱️ 交付時限:</span>
+                  <span class="font-mono text-cyan-300 font-semibold">${EconomyEngine.getAllowedDurationSec(order)} 遊戲秒</span>
+                </div>
+                <div class="flex items-center gap-1" title="客戶等待報價有效時間，逾時將轉向其他代工廠並刷新更換">
+                  <span class="text-slate-400">⏳ 報價時效:</span>
+                  <span class="market-order-timer font-mono font-bold ${Math.max(0, Math.ceil(((order.marketExpiresAt || (Date.now() + 60000)) - Date.now()) / 1000)) <= 15 ? 'text-red-400 animate-pulse' : 'text-amber-400'}" data-order-id="${order.id}">
+                    ${Math.max(0, Math.ceil(((order.marketExpiresAt || (Date.now() + 60000)) - Date.now()) / 1000))} 秒
+                  </span>
+                </div>
+              </div>
+
+              <!-- Litho CD warning if incapable -->
               ${!isLithoCapable ? `
                 <div class="p-2 rounded bg-red-900/20 border border-red-700/30 text-[11px] text-red-300 flex items-center gap-1.5">
                   <span>⚠️</span>
                   <span>廠內機台極限 CD (${bestLithoCD === 999999 ? '無微影機' : bestLithoCD + 'nm'}) 無法滿足 ${nodeStr} 製程需求！</span>
                 </div>
-              ` : `
-                <div class="text-[11px] text-slate-400 flex items-center gap-1">
-                  <span>⏱️ 交付時限:</span>
-                  <span class="font-mono text-slate-300">${Math.max(0, order.deadlineGameTime - state.gameTime)} 遊戲秒</span>
-                </div>
-              `}
+              ` : ''}
 
               <!-- Action Button -->
               <button
@@ -474,8 +483,9 @@ export class ContractModal {
       if (this.currentTab === 'MARKET') {
         const prevCount = (state.marketOrders || []).length;
         const replenished = EconomyEngine.checkOrderReplenishment(state);
+        const expired = EconomyEngine.checkMarketOrdersExpiry(state);
         const currentCount = (state.marketOrders || []).length;
-        if (replenished || prevCount !== currentCount) {
+        if (replenished || expired || prevCount !== currentCount) {
           SaveGameService.saveToLocalStorage(state);
           this.render(container, state, onUpdate);
           return;
@@ -486,6 +496,21 @@ export class ContractModal {
           const remSec = state.nextOrderRespawnTime ? Math.max(0, Math.ceil((state.nextOrderRespawnTime - Date.now()) / 1000)) : 0;
           timerEl.textContent = `${remSec}`;
         }
+
+        // 增量更新每張合約卡片上的報價等待倒數
+        container.querySelectorAll('.market-order-timer').forEach(el => {
+          const orderId = el.getAttribute('data-order-id');
+          const ord = state.marketOrders?.find(o => o.id === orderId);
+          if (ord && ord.marketExpiresAt) {
+            const remSec = Math.max(0, Math.ceil((ord.marketExpiresAt - Date.now()) / 1000));
+            el.textContent = `${remSec} 秒`;
+            if (remSec <= 15) {
+              el.className = 'market-order-timer font-mono font-bold text-red-400 animate-pulse';
+            } else {
+              el.className = 'market-order-timer font-mono font-bold text-amber-400';
+            }
+          }
+        });
       }
     }, 1000);
 
@@ -504,7 +529,12 @@ export class ContractModal {
         state.player.cash += order.nrePaid;
         FinanceEngine.recordNREFee(state, order.nrePaid);
 
-        // 2. 加入 activeOrders
+        // 2. 設置正式交付截止時間 (以簽約接單時的 gameTime 為基準，給足完整的約定工期時限)
+        const allowedDuration = EconomyEngine.getAllowedDurationSec(order);
+        order.allowedDurationSec = allowedDuration;
+        order.deadlineGameTime = state.gameTime + allowedDuration;
+
+        // 3. 加入 activeOrders
         state.activeOrders.push(order);
 
         // 3. 建立對應的 WaferLotData 批次投入產線

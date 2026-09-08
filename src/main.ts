@@ -115,6 +115,9 @@ class FoundryGame {
       // 0.1 合約市場訂單補齊檢查 (接單後冷卻補充新訂單)
       EconomyEngine.checkOrderReplenishment(this.state);
 
+      // 0.2 市場訂單等待時間過期檢查 (逾期未接單自動更換刷新)
+      EconomyEngine.checkMarketOrdersExpiry(this.state);
+
       // 1. 維護機台磨損與 🛡️ TPM 在線保養檢核
       const staffMap = new Map(this.state.staff.map((s) => [s.id, s]));
       for (const machine of this.state.machines) {
