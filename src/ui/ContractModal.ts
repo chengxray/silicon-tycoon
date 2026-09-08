@@ -2,46 +2,34 @@
  * ContractModal.ts
  * 負責合約看板與在製訂單追蹤：
  * 1. 承接 IC 設計公司市場代工訂單，即刻領取 NRE 光罩研發預付款，投入產線排程
- * 2. 監控在製晶圓批次 (Wafer Lots) 之加工站點、Q-Time 死線與出貨結算
+ * 2. 訂單持久化儲存於 SaveGameV2.marketOrders，開啟/關閉視窗不隨意重洗
+ * 3. 每接一筆訂單啟動 60 秒冷卻逐筆補齊，或付費派遣商業獵單顧問一鍵刷新
+ * 4. 監控在製晶圓批次 (Wafer Lots) 之加工站點、Q-Time 死線與出貨結算
  */
 
-import { SaveGameV2, OrderData, WaferLotData } from '../types';
+import { SaveGameV2, WaferLotData } from '../types';
 import { EconomyEngine } from '../engine/EconomyEngine';
 import { ProductionEngine } from '../engine/ProductionEngine';
 import { SoundEffects } from '../audio/SoundEffects';
 import { RayleighEngine } from '../engine/RayleighEngine';
 import { AchievementEngine } from '../engine/AchievementEngine';
 import { FinanceEngine } from '../engine/FinanceEngine';
+import { SaveGameService } from '../services/SaveGameService';
 import { WaferMapModal } from './WaferMapModal';
 import { LayerAllocationModal } from './LayerAllocationModal';
 
 export class ContractModal {
-  private static marketOrders: OrderData[] = [];
-  private static lastRefreshTime = 0;
   private static currentTab: 'MARKET' | 'ACTIVE' = 'MARKET';
+  private static countdownIntervalId: number | null = null;
 
   public static show(state: SaveGameV2, onUpdate: () => void): void {
     const container = document.getElementById('modal-container');
     if (!container) return;
 
-    // 若市場訂單為空或已超過 60 秒，自動刷新
-    if (this.marketOrders.length === 0 || state.gameTime - this.lastRefreshTime > 60) {
-      this.refreshMarketOrders(state);
-    }
+    // 確保市場訂單池已持久化存在，不隨意在開關彈窗時刷新
+    EconomyEngine.ensureMarketOrders(state);
 
     this.render(container, state, onUpdate);
-  }
-
-  private static refreshMarketOrders(state: SaveGameV2): void {
-    const rollingYield = state.rollingYieldHistory.length > 0
-      ? state.rollingYieldHistory.reduce((a, b) => a + b, 0) / state.rollingYieldHistory.length
-      : null;
-    this.marketOrders = EconomyEngine.generateContractBoard(
-      state.player.foundryTier,
-      rollingYield,
-      state.gameTime
-    );
-    this.lastRefreshTime = state.gameTime;
   }
 
   private static render(
@@ -49,6 +37,7 @@ export class ContractModal {
     state: SaveGameV2,
     onUpdate: () => void
   ): void {
+    const marketOrders = state.marketOrders || [];
     const rollingYield = state.rollingYieldHistory.length > 0
       ? state.rollingYieldHistory.reduce((a, b) => a + b, 0) / state.rollingYieldHistory.length
       : null;
@@ -56,6 +45,7 @@ export class ContractModal {
 
     // 計算廠內最高解析度之微影機極限 CD (防呆檢查)
     const bestLithoCD = this.getBestLithoCD(state);
+    const refreshCost = EconomyEngine.getMarketRefreshCost(state.player.foundryTier);
 
     container.innerHTML = `
       <div id="modal-backdrop-contract" class="modal-backdrop">
@@ -99,7 +89,7 @@ export class ContractModal {
           <div class="flex border-b border-slate-700/60 bg-slate-900/40 px-6 pt-2 flex-shrink-0">
             <button id="tab-market" class="px-4 py-2.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 ${this.currentTab === 'MARKET' ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400 hover:text-slate-200'}">
               <span>🌐 承接市場訂單池</span>
-              <span class="px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] font-mono">${this.marketOrders.length}</span>
+              <span class="px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] font-mono">${marketOrders.length}</span>
             </button>
             <button id="tab-active" class="px-4 py-2.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 ${this.currentTab === 'ACTIVE' ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400 hover:text-slate-200'}">
               <span>⚡ 在製訂單與批次</span>
@@ -107,8 +97,9 @@ export class ContractModal {
             </button>
             <div class="ml-auto py-1.5 flex items-center">
               ${this.currentTab === 'MARKET' ? `
-                <button id="btn-refresh-market" class="btn-sci-fi text-[11px] py-1 px-3">
-                  🔄 刷新訂單池
+                <button id="btn-refresh-market" class="btn-sci-fi text-xs py-1.5 px-3 bg-amber-950/70 hover:bg-amber-900 border border-amber-500/60 text-amber-300 font-bold flex items-center gap-1.5 shadow-sm cursor-pointer" title="派遣商業獵單顧問重新招攬合約池 (費用: NT$ ${refreshCost.toLocaleString()})">
+                  <span>🔄 商業獵單刷新</span>
+                  <span class="font-mono text-amber-200">(NT$ ${refreshCost.toLocaleString()})</span>
                 </button>
               ` : ''}
             </div>
@@ -137,18 +128,45 @@ export class ContractModal {
   }
 
   private static renderMarketOrders(state: SaveGameV2, bestLithoCD: number): string {
-    if (this.marketOrders.length === 0) {
+    const marketOrders = state.marketOrders || [];
+    const isFull = marketOrders.length >= EconomyEngine.MAX_MARKET_ORDERS;
+    const remSec = state.nextOrderRespawnTime ? Math.max(0, Math.ceil((state.nextOrderRespawnTime - Date.now()) / 1000)) : 0;
+
+    let bannerHtml = '';
+    if (!isFull) {
+      bannerHtml = `
+        <div id="contract-respawn-banner" class="mb-4 p-3 rounded-xl bg-slate-900/90 border border-cyan-500/40 flex items-center justify-between text-xs text-slate-300 shadow-md">
+          <div class="flex items-center gap-2.5">
+            <span class="text-base animate-spin">⏳</span>
+            <div>
+              <span class="font-bold text-cyan-300">新客戶合約洽談中</span>
+              <span class="text-slate-400 ml-1.5">(合約池: ${marketOrders.length}/${EconomyEngine.MAX_MARKET_ORDERS} 筆，每筆訂單冷卻 60 秒陸續送達)</span>
+            </div>
+          </div>
+          <div class="font-mono font-bold text-amber-400 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800 text-right">
+            下一筆合約抵達：<span id="contract-respawn-timer" class="text-amber-300 text-sm font-black">${remSec}</span> 秒
+          </div>
+        </div>
+      `;
+    }
+
+    if (marketOrders.length === 0) {
       return `
-        <div class="text-center py-12 text-slate-400">
-          <div class="text-4xl mb-2">📭</div>
-          <p class="text-sm">目前市場暫無新合約，請點擊上方按鈕刷新合約板！</p>
+        ${bannerHtml}
+        <div class="text-center py-12 text-slate-400 space-y-3">
+          <div class="text-5xl mb-2 animate-bounce">📭</div>
+          <p class="text-base font-bold text-slate-200">目前合約公告板已全數接單完畢！</p>
+          <p class="text-xs text-slate-400">
+            新客戶合約將在冷卻倒數結束後自動送達，或可點擊右上角【商業獵單刷新】即刻引進 5 筆全新合約。
+          </p>
         </div>
       `;
     }
 
     return `
+      ${bannerHtml}
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        ${this.marketOrders.map((order, idx) => {
+        ${marketOrders.map((order, idx) => {
           const isLithoCapable = bestLithoCD <= order.nodeNm;
           const nodeStr = order.nodeNm >= 1000
             ? `${order.nodeNm / 1000} µm`
@@ -259,44 +277,50 @@ export class ContractModal {
                     </span>
                     ${isOverdue ? '<span class="px-2 py-0.5 rounded bg-red-600 text-white text-[10px] font-bold animate-pulse">逾期追討中</span>' : ''}
                   </div>
-                  <div class="text-xs text-slate-400 font-mono">訂單編號: ${order.id}</div>
+                  <div class="text-xs text-slate-400 mt-0.5 font-mono">
+                    合約編號: ${order.id} | 光罩層數: ${order.layerCount} 層
+                  </div>
                 </div>
 
                 <div class="text-right">
                   <div class="text-xs ${isOverdue ? 'text-red-400 font-bold' : 'text-slate-400'}">
-                    ${isOverdue ? '⚠️ 已超時' : '剩餘時間: ' + remainingSec + ' 秒'}
+                    ${isOverdue ? '已過期 (違約罰金累積中)' : `剩餘交期: ${remainingSec} 秒`}
                   </div>
-                  <div class="text-xs font-mono text-emerald-400">
-                    單價: NT$ ${order.unitPrice.toFixed(2)}
+                  <div class="text-[10px] text-slate-400 mt-0.5">
+                    出貨單價: NT$ ${order.unitPrice.toFixed(2)} /顆
                   </div>
                 </div>
               </div>
 
               <!-- Progress Bar -->
-              <div class="space-y-1">
-                <div class="flex justify-between text-xs text-slate-300 font-mono">
-                  <span>合格交付量: ${order.goodDiesDelivered} / ${order.totalDies} 顆</span>
-                  <span>${progressPercent}%</span>
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-slate-400">出貨進度</span>
+                  <span class="font-mono text-cyan-300">${order.goodDiesDelivered.toLocaleString()} / ${order.totalDies.toLocaleString()} 顆 (${progressPercent}%)</span>
                 </div>
-                <div class="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
-                  <div class="h-full bg-cyan-400 transition-all duration-300" style="width: ${progressPercent}%;"></div>
+                <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+                  <div class="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 transition-all duration-300" style="width: ${progressPercent}%"></div>
                 </div>
               </div>
 
-              <!-- In-fab lots status -->
-              <div class="p-3 rounded-lg bg-slate-950/60 border border-slate-800 space-y-2">
-                <div class="text-[11px] font-semibold text-slate-400">無塵室在製晶圓盒 (Lots):</div>
+              <!-- Lots in Production -->
+              <div>
+                <div class="text-xs text-slate-400 font-semibold mb-2">在製批次 (Wafer Lots) 狀態：</div>
                 ${relatedLots.length === 0 ? `
-                  <div class="text-xs text-slate-500 italic">所有晶圓盒已完工，正等待結算交付...</div>
+                  <div class="text-xs text-slate-400 italic">尚無加工批次投入</div>
                 ` : `
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     ${relatedLots.map(lot => {
-                      let stationBadge = `<span class="text-cyan-300 font-bold">${lot.currentStation}</span>`;
+                      let stationBadge = `<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-300">${lot.currentStation}</span>`;
                       if (lot.currentStation === 'LIT') {
-                        stationBadge = `<span class="text-amber-300 font-bold">LIT (${lot.litSubStep || 'COAT'})</span>`;
+                        stationBadge = `<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-yellow-500/20 text-yellow-300 border border-yellow-500/40">微影 (${lot.litSubStep || 'COAT'})</span>`;
+                      } else if (lot.status === 'COMPLETED') {
+                        stationBadge = `<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">已完工</span>`;
                       }
 
+                      // 尋找當前承載此批次的機台
                       const targetMachine = state.machines.find(m => {
+                        if (m.status === 'EXPLODED') return false;
                         if (lot.currentStation === 'LIT') {
                           if (lot.litSubStep === 'COAT' || lot.litSubStep === 'DEVELOP') return m.category === 'TRACK';
                           return m.category === 'LITHO';
@@ -343,7 +367,7 @@ export class ContractModal {
               <div class="flex items-center justify-between gap-2 pt-1">
                 <div>
                   ${order.layerCount > 1 ? `
-                    <button class="btn-layer-allocation btn-sci-fi text-xs py-1 px-3 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/50 text-indigo-300 flex items-center gap-1.5" data-order-id="${order.id}" title="自訂先進製程多層微影機台分配">
+                    <button class="btn-layer-allocation btn-sci-fi text-xs py-1 px-3 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/50 text-indigo-300 flex items-center gap-1.5 cursor-pointer" data-order-id="${order.id}" title="自訂先進製程多層微影機台分配">
                       <span>🎛️</span>
                       <span>微影分層配方 (${order.layerAllocations?.length || order.layerCount}層)</span>
                     </button>
@@ -352,7 +376,7 @@ export class ContractModal {
 
                 <div class="flex items-center gap-2">
                   ${relatedLots.length === 0 || relatedLots.every(l => l.status === 'COMPLETED') ? `
-                    <button class="btn-settle-order btn-sci-fi text-xs py-1.5 px-4 bg-emerald-600 hover:bg-emerald-500" data-order-id="${order.id}">
+                    <button class="btn-settle-order btn-sci-fi text-xs py-1.5 px-4 bg-emerald-600 hover:bg-emerald-500 cursor-pointer" data-order-id="${order.id}">
                       📦 完成出貨結算尾款
                     </button>
                   ` : `
@@ -377,6 +401,10 @@ export class ContractModal {
     onUpdate: () => void
   ): void {
     const closeModal = () => {
+      if (this.countdownIntervalId !== null) {
+        clearInterval(this.countdownIntervalId);
+        this.countdownIntervalId = null;
+      }
       SoundEffects.playClick();
       container.innerHTML = '';
       window.removeEventListener('keydown', onKeyDown);
@@ -413,18 +441,59 @@ export class ContractModal {
       this.render(container, state, onUpdate);
     });
 
-    // 刷新市場訂單
+    // 商業獵單付費刷新
     document.getElementById('btn-refresh-market')?.addEventListener('click', () => {
-      SoundEffects.playClick();
-      this.refreshMarketOrders(state);
+      const refreshCost = EconomyEngine.getMarketRefreshCost(state.player.foundryTier);
+      if (state.player.cash < refreshCost) {
+        SoundEffects.playClick();
+        alert(`❌ 廠房資金不足！派遣商業獵單顧問需要 NT$ ${refreshCost.toLocaleString()}，目前現金僅有 NT$ ${Math.round(state.player.cash).toLocaleString()}`);
+        return;
+      }
+
+      const confirmed = confirm(
+        `【商業獵單刷新確認】\n\n您確定要支付 NT$ ${refreshCost.toLocaleString()} 聘請半導體商業獵單顧問，為合約板重新引入 5 筆全新客戶合約嗎？`
+      );
+      if (!confirmed) return;
+
+      state.player.cash -= refreshCost;
+      FinanceEngine.recordOpEx(state, '商業獵單顧問費', refreshCost);
+      EconomyEngine.forceRefreshAllMarketOrders(state);
+      SaveGameService.saveToLocalStorage(state);
+
+      SoundEffects.playCoin();
       this.render(container, state, onUpdate);
+      onUpdate();
     });
+
+    // 設定定時倒數器更新看板 (不閃爍重刷)
+    if (this.countdownIntervalId !== null) {
+      clearInterval(this.countdownIntervalId);
+    }
+    this.countdownIntervalId = window.setInterval(() => {
+      if (this.currentTab === 'MARKET') {
+        const prevCount = (state.marketOrders || []).length;
+        const replenished = EconomyEngine.checkOrderReplenishment(state);
+        const currentCount = (state.marketOrders || []).length;
+        if (replenished || prevCount !== currentCount) {
+          SaveGameService.saveToLocalStorage(state);
+          this.render(container, state, onUpdate);
+          return;
+        }
+
+        const timerEl = document.getElementById('contract-respawn-timer');
+        if (timerEl) {
+          const remSec = state.nextOrderRespawnTime ? Math.max(0, Math.ceil((state.nextOrderRespawnTime - Date.now()) / 1000)) : 0;
+          timerEl.textContent = `${remSec}`;
+        }
+      }
+    }, 1000);
 
     // 簽約接單
     container.querySelectorAll('.btn-accept-order').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const index = parseInt((e.currentTarget as HTMLElement).getAttribute('data-index') || '0', 10);
-        const order = this.marketOrders[index];
+        const marketOrders = state.marketOrders || [];
+        const order = marketOrders[index];
         if (!order) return;
 
         // 接單音效
@@ -456,11 +525,15 @@ export class ContractModal {
           state.activeLots.push(lot);
         }
 
-        // 4. 從市場池移除
-        this.marketOrders.splice(index, 1);
+        // 4. 從市場池移除，啟動冷卻補齊計時器
+        marketOrders.splice(index, 1);
+        if (marketOrders.length < EconomyEngine.MAX_MARKET_ORDERS && !state.nextOrderRespawnTime) {
+          state.nextOrderRespawnTime = Date.now() + EconomyEngine.ORDER_RESPAWN_COOLDOWN_MS;
+        }
 
-        // 5. 檢核成就
+        // 5. 檢核成就與存檔
         AchievementEngine.checkAchievements(state);
+        SaveGameService.saveToLocalStorage(state);
 
         onUpdate();
         this.currentTab = 'ACTIVE';
@@ -504,6 +577,8 @@ export class ContractModal {
 
         SoundEffects.playFanfare();
         AchievementEngine.checkAchievements(state);
+        SaveGameService.saveToLocalStorage(state);
+
         onUpdate();
         this.render(container, state, onUpdate);
       });

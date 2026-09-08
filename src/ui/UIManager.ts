@@ -439,6 +439,7 @@ export class UIManager {
 
   public updateState(newState: SaveGameV2): void {
     this.state = newState;
+    this.topHUD.rebuild();
     this.render();
   }
 

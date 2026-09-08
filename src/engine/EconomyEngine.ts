@@ -3,7 +3,7 @@
  * 負責合約訂單經濟模型、NRE 光罩預付款、出貨結算、債務保護與薪資水電優先權
  */
 
-import { OrderData, PlayerProfile, StaffData } from '../types';
+import { OrderData, PlayerProfile, StaffData, SaveGameV2 } from '../types';
 
 export interface NodePricingSpec {
   nodeNm: number;
@@ -14,17 +14,18 @@ export interface NodePricingSpec {
 
 export class EconomyEngine {
   // 製程節點基礎單價 (BasePrice) 與光罩款 (BaseNRE) 官方權威表
+  // 設定原則：NRE 光罩開模費佔整筆訂單約 15%~20%，晶圓出貨款佔 80%~85%！
   public static readonly PRICING_TABLE: NodePricingSpec[] = [
-    { nodeNm: 10000, basePrice: 2, baseNRE: 80_000, minTier: 1 },
-    { nodeNm: 3000, basePrice: 4, baseNRE: 180_000, minTier: 1 },
-    { nodeNm: 1000, basePrice: 6, baseNRE: 400_000, minTier: 2 },
-    { nodeNm: 350, basePrice: 10, baseNRE: 900_000, minTier: 3 },
-    { nodeNm: 180, basePrice: 18, baseNRE: 2_000_000, minTier: 3 },
-    { nodeNm: 90, basePrice: 40, baseNRE: 5_500_000, minTier: 4 },
-    { nodeNm: 45, basePrice: 80, baseNRE: 15_000_000, minTier: 4 },
-    { nodeNm: 28, basePrice: 200, baseNRE: 45_000_000, minTier: 5 },
-    { nodeNm: 7, basePrice: 600, baseNRE: 160_000_000, minTier: 6 },
-    { nodeNm: 2, basePrice: 1500, baseNRE: 450_000_000, minTier: 6 }
+    { nodeNm: 10000, basePrice: 180,   baseNRE: 18_000,      minTier: 1 },
+    { nodeNm: 3000,  basePrice: 320,   baseNRE: 35_000,      minTier: 1 },
+    { nodeNm: 1000,  basePrice: 500,   baseNRE: 80_000,      minTier: 2 },
+    { nodeNm: 350,   basePrice: 850,   baseNRE: 180_000,     minTier: 3 },
+    { nodeNm: 180,   basePrice: 1400,  baseNRE: 350_000,     minTier: 3 },
+    { nodeNm: 90,    basePrice: 2400,  baseNRE: 800_000,     minTier: 4 },
+    { nodeNm: 45,    basePrice: 4200,  baseNRE: 1_800_000,   minTier: 4 },
+    { nodeNm: 28,    basePrice: 7500,  baseNRE: 4_000_000,   minTier: 5 },
+    { nodeNm: 7,     basePrice: 18000, baseNRE: 12_000_000,  minTier: 6 },
+    { nodeNm: 2,     basePrice: 45000, baseNRE: 35_000_000,  minTier: 6 }
   ];
 
   /**
@@ -178,65 +179,158 @@ export class EconomyEngine {
     };
   }
 
+  public static readonly MAX_MARKET_ORDERS = 5;
+  public static readonly ORDER_RESPAWN_COOLDOWN_MS = 60_000; // 接單後 60 秒新客戶補進一單
+
   /**
-   * 生成適合當前 FoundryTier 的 6 張合約訂單池
+   * 依據 Foundry Tier 取得商業獵單刷新公關費用
    */
-  public static generateContractBoard(
+  public static getMarketRefreshCost(foundryTier: number): number {
+    const costs: Record<number, number> = {
+      1: 50_000,
+      2: 150_000,
+      3: 500_000,
+      4: 1_500_000,
+      5: 5_000_000,
+      6: 20_000_000
+    };
+    return costs[foundryTier] || 50_000;
+  }
+
+  /**
+   * 生成單張符合當前世代的合約訂單
+   */
+  public static generateSingleOrder(
     foundryTier: number,
     rollingYieldIndex: number | null,
-    currentGameTime: number
-  ): OrderData[] {
-    const orders: OrderData[] = [];
+    currentGameTime: number,
+    orderIndex = 0
+  ): OrderData {
     const clientNames = [
       '聯發通訊', '蘋果核心', '輝達智能', '高通晶創',
       '超微運算', '台積晶心', '瑞昱音訊', '博通網通'
     ];
 
-    // 依據玩家世代篩選可承接之製程節點
     const availableSpecs = this.PRICING_TABLE.filter(s => s.minTier <= foundryTier);
     const trustMultiplier = this.calculateTrustMultiplier(rollingYieldIndex);
+    const spec = availableSpecs[Math.floor(Math.random() * availableSpecs.length)];
+    const client = clientNames[(orderIndex + Math.floor(Math.random() * 8)) % clientNames.length];
 
-    for (let i = 0; i < 6; i++) {
-      const spec = availableSpecs[Math.floor(Math.random() * availableSpecs.length)];
-      const client = clientNames[(i + Math.floor(Math.random() * 5)) % clientNames.length];
-      
-      // 層數：低階 3~5 層，高階 10~25 層
-      const minLayers = spec.minTier <= 2 ? 3 : 5;
-      const maxLayers = spec.minTier <= 2 ? 5 : (spec.minTier <= 4 ? 12 : 24);
-      const layerCount = Math.floor(Math.random() * (maxLayers - minLayers + 1)) + minLayers;
+    // 層數：低階 3~5 層，高階 10~25 層
+    const minLayers = spec.minTier <= 2 ? 3 : 5;
+    const maxLayers = spec.minTier <= 2 ? 5 : (spec.minTier <= 4 ? 12 : 24);
+    const layerCount = Math.floor(Math.random() * (maxLayers - minLayers + 1)) + minLayers;
 
-      // 晶粒總數與晶圓片數
-      const waferCount = [3, 5, 10, 25][Math.floor(Math.random() * 4)];
-      const diesPerWafer = spec.nodeNm >= 1000 ? 500 : 2000;
-      const totalDies = waferCount * diesPerWafer;
+    // 晶粒總數與晶圓片數
+    const waferCount = [3, 5, 10, 25][Math.floor(Math.random() * 4)];
+    const diesPerWafer = spec.nodeNm >= 1000 ? 500 : 2000;
+    const totalDies = waferCount * diesPerWafer;
 
-      // 急迫度 (1.0 常規, 1.2 急件, 1.5 SHR 超急件)
-      const urgencyPool = [1.0, 1.0, 1.0, 1.2, 1.5];
-      const urgencyMultiplier = urgencyPool[Math.floor(Math.random() * urgencyPool.length)];
+    // 急迫度 (1.0 常規, 1.2 急件, 1.5 SHR 超急件)
+    const urgencyPool = [1.0, 1.0, 1.0, 1.2, 1.5];
+    const urgencyMultiplier = urgencyPool[Math.floor(Math.random() * urgencyPool.length)];
 
-      const nrePaid = this.calculateUpfrontNRE(spec.nodeNm, layerCount, urgencyMultiplier);
-      const unitPrice = this.calculateUnitPrice(spec.nodeNm, layerCount, urgencyMultiplier, trustMultiplier);
-      
-      // 截止時間：依層數與急迫度計算
-      const secondsPerLayer = 30; // 基礎每層 30 秒
-      const allowedTime = Math.round((layerCount * secondsPerLayer * waferCount * 0.8) / urgencyMultiplier + 180);
-      const deadlineGameTime = currentGameTime + allowedTime;
+    const nrePaid = this.calculateUpfrontNRE(spec.nodeNm, layerCount, urgencyMultiplier);
+    const unitPrice = this.calculateUnitPrice(spec.nodeNm, layerCount, urgencyMultiplier, trustMultiplier);
 
-      orders.push({
-        id: `ORD-${Date.now().toString(36).toUpperCase()}-${i}`,
-        clientName: client,
-        nodeNm: spec.nodeNm,
-        layerCount,
-        totalDies,
-        goodDiesDelivered: 0,
-        nrePaid,
-        unitPrice,
-        urgencyMultiplier,
-        deadlineGameTime,
-        status: 'ACTIVE'
-      });
+    // 截止時間：依層數與急迫度計算
+    const secondsPerLayer = 30; // 基礎每層 30 秒
+    const allowedTime = Math.round((layerCount * secondsPerLayer * waferCount * 0.8) / urgencyMultiplier + 180);
+    const deadlineGameTime = currentGameTime + allowedTime;
+
+    return {
+      id: `ORD-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 900 + 100)}`,
+      clientName: client,
+      nodeNm: spec.nodeNm,
+      layerCount,
+      totalDies,
+      goodDiesDelivered: 0,
+      nrePaid,
+      unitPrice,
+      urgencyMultiplier,
+      deadlineGameTime,
+      status: 'ACTIVE'
+    };
+  }
+
+  /**
+   * 生成指定數量合約訂單池 (預設 5 張)
+   */
+  public static generateContractBoard(
+    foundryTier: number,
+    rollingYieldIndex: number | null,
+    currentGameTime: number,
+    count = this.MAX_MARKET_ORDERS
+  ): OrderData[] {
+    const orders: OrderData[] = [];
+    for (let i = 0; i < count; i++) {
+      orders.push(this.generateSingleOrder(foundryTier, rollingYieldIndex, currentGameTime, i));
+    }
+    return orders;
+  }
+
+  /**
+   * 確保存檔中有市場訂單，持久保存不被任意清空
+   */
+  public static ensureMarketOrders(state: SaveGameV2): void {
+    if (!state.marketOrders || state.marketOrders.length === 0) {
+      const rollingYield = state.rollingYieldHistory && state.rollingYieldHistory.length > 0
+        ? state.rollingYieldHistory.reduce((a, b) => a + b, 0) / state.rollingYieldHistory.length
+        : null;
+      state.marketOrders = this.generateContractBoard(state.player.foundryTier, rollingYield, state.gameTime);
+      state.nextOrderRespawnTime = 0;
+    }
+  }
+
+  /**
+   * 檢查合約補齊倒數：接單後每隔 60 秒新補 1 筆訂單，直到補滿上限
+   */
+  public static checkOrderReplenishment(state: SaveGameV2): boolean {
+    if (!state.marketOrders) {
+      state.marketOrders = [];
     }
 
-    return orders;
+    // 已達上限，無需補充
+    if (state.marketOrders.length >= this.MAX_MARKET_ORDERS) {
+      state.nextOrderRespawnTime = 0;
+      return false;
+    }
+
+    const now = Date.now();
+    // 尚未啟動倒數計時，即刻啟動
+    if (!state.nextOrderRespawnTime || state.nextOrderRespawnTime === 0) {
+      state.nextOrderRespawnTime = now + this.ORDER_RESPAWN_COOLDOWN_MS;
+      return true;
+    }
+
+    // 倒數結束，補充 1 筆新訂單
+    if (now >= state.nextOrderRespawnTime) {
+      const rollingYield = state.rollingYieldHistory && state.rollingYieldHistory.length > 0
+        ? state.rollingYieldHistory.reduce((a, b) => a + b, 0) / state.rollingYieldHistory.length
+        : null;
+      const newOrder = this.generateSingleOrder(state.player.foundryTier, rollingYield, state.gameTime);
+      state.marketOrders.push(newOrder);
+
+      // 若仍未補滿，繼續下一個 60 秒冷卻；若已補滿則歸零
+      if (state.marketOrders.length < this.MAX_MARKET_ORDERS) {
+        state.nextOrderRespawnTime = now + this.ORDER_RESPAWN_COOLDOWN_MS;
+      } else {
+        state.nextOrderRespawnTime = 0;
+      }
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * 付費獵單強制立即刷滿全體合約池
+   */
+  public static forceRefreshAllMarketOrders(state: SaveGameV2): void {
+    const rollingYield = state.rollingYieldHistory && state.rollingYieldHistory.length > 0
+      ? state.rollingYieldHistory.reduce((a, b) => a + b, 0) / state.rollingYieldHistory.length
+      : null;
+    state.marketOrders = this.generateContractBoard(state.player.foundryTier, rollingYield, state.gameTime);
+    state.nextOrderRespawnTime = 0;
   }
 }

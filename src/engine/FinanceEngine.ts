@@ -201,6 +201,20 @@ export class FinanceEngine {
   }
 
   /**
+   * 記錄商業獵單與營運顧問營業費用支出 (OpEx / Sourcing Fee)
+   */
+  public static recordOpEx(state: SaveGameV2, _desc: string, amount: number): void {
+    const fin = this.ensureFinancialState(state);
+    fin.today.expenses.maintenance += amount;
+    fin.thisWeek.expenses.maintenance += amount;
+    fin.thisMonth.expenses.maintenance += amount;
+    fin.allTimeExpenses += amount;
+    this.updateRecordTotals(fin.today, state);
+    this.updateRecordTotals(fin.thisWeek, state);
+    this.updateRecordTotals(fin.thisMonth, state);
+  }
+
+  /**
    * 記錄招聘簽約金
    */
   public static recordSigningBonus(state: SaveGameV2, amount: number): void {

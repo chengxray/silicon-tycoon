@@ -111,6 +111,9 @@ class FoundryGame {
       // 0. 財務收支模擬 (折舊、水電化學耗損、薪資與日/周/月推進)
       FinanceEngine.tickSimulation(this.state, 1);
 
+      // 0.1 合約市場訂單補齊檢查 (接單後冷卻補充新訂單)
+      EconomyEngine.checkOrderReplenishment(this.state);
+
       // 1. 維護機台磨損與 🛡️ TPM 在線保養檢核
       const staffMap = new Map(this.state.staff.map((s) => [s.id, s]));
       for (const machine of this.state.machines) {

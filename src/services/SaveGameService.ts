@@ -15,6 +15,7 @@ import {
 import { MaintenanceEngine } from '../engine/MaintenanceEngine';
 import { AchievementEngine } from '../engine/AchievementEngine';
 import { FinanceEngine } from '../engine/FinanceEngine';
+import { EconomyEngine } from '../engine/EconomyEngine';
 
 export interface OfflineReport {
   offlineDurationSeconds: number;
@@ -165,7 +166,9 @@ export class SaveGameService {
       },
       achievements: AchievementEngine.getInitialAchievements(),
       gameTime: 0,
-      financialState: FinanceEngine.initFinancialState(50_000_000, 70_000_000)
+      financialState: FinanceEngine.initFinancialState(50_000_000, 70_000_000),
+      marketOrders: EconomyEngine.generateContractBoard(1, null, 0),
+      nextOrderRespawnTime: 0
     };
   }
 
@@ -444,6 +447,7 @@ export class SaveGameService {
             if (parsed.player.totalWafersDelivered === undefined) parsed.player.totalWafersDelivered = 0;
             if (parsed.player.rdInvestedCash === undefined) parsed.player.rdInvestedCash = 0;
           }
+          EconomyEngine.ensureMarketOrders(parsed as SaveGameV2);
           return parsed as SaveGameV2;
         }
       }

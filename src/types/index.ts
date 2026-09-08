@@ -240,5 +240,7 @@ export interface SaveGameV2 {
   achievements: AchievementItem[];
   gameTime: number;
   financialState?: FinancialState;
+  marketOrders?: OrderData[];
+  nextOrderRespawnTime?: number;
 }
 
