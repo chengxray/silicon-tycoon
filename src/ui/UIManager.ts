@@ -67,54 +67,193 @@ export class UIManager {
 
   public render(): void {
     this.topHUD.render(this.state);
-    this.renderProductionTicker();
+    this.renderOrderStatusWidget();
   }
 
-  private renderProductionTicker(): void {
+  private renderOrderStatusWidget(): void {
     const container = document.getElementById('hud-widgets');
     if (!container) return;
 
-    const activeLots = this.state.activeLots.filter((l) => l.status === 'PROCESSING');
-    if (activeLots.length === 0) {
-      if (this.state.activeOrders.length === 0) {
-        container.innerHTML = `
-          <div id="hud-production-ticker" title="目前無在製訂單，點擊前往合約板承接新訂單">
-            <span class="text-amber-400">📋</span>
-            <span class="text-slate-300 font-medium">產線待命中 — 點擊合約板承接新訂單</span>
-          </div>
-        `;
-      } else {
-        container.innerHTML = `
-          <div id="hud-production-ticker" class="border-emerald-500/60" title="所有批次已加工完畢，點擊進行出貨結算">
-            <span class="text-emerald-400 animate-bounce">📦</span>
-            <span class="text-emerald-300 font-bold">晶圓已完工！點此進行出貨結算尾款</span>
-          </div>
-        `;
-      }
-    } else {
-      // 統計站點進度
-      const stationMap: Record<string, number> = {};
-      for (const lot of activeLots) {
-        const st = lot.currentStation === 'LIT' ? `LIT(${lot.litSubStep || 'COAT'})` : lot.currentStation;
-        stationMap[st] = (stationMap[st] || 0) + 1;
-      }
-      const stationDetails = Object.entries(stationMap)
-        .map(([st, cnt]) => `${st}: ${cnt}批`)
-        .join(' | ');
-
+    if (this.state.activeOrders.length === 0) {
       container.innerHTML = `
-        <div id="hud-production-ticker" title="點擊檢視在製訂單與批次進度">
-          <span class="animate-spin text-cyan-400">⚙️</span>
-          <span class="font-bold text-white">生產進行中:</span>
-          <span class="text-cyan-300 font-mono font-bold">${activeLots.length} 批在製</span>
-          <span class="text-slate-500">|</span>
-          <span class="text-amber-300 font-mono text-[11px]">${stationDetails}</span>
-          <span class="text-[10px] px-2 py-0.5 rounded bg-cyan-900/60 text-cyan-200 border border-cyan-500/30">查看訂單</span>
+        <div id="hud-order-status-bar" class="hud-order-bar order-empty cursor-pointer">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-xl flex-shrink-0">
+              📋
+            </div>
+            <div>
+              <div class="text-sm font-bold text-amber-300 flex items-center gap-2">
+                <span>【產線待命中】尚未承接晶圓代工訂單</span>
+                <span class="px-1.5 py-0.2 rounded text-[10px] font-mono bg-amber-950 text-amber-300 border border-amber-500/30">IDLE</span>
+              </div>
+              <div class="text-xs text-slate-400 mt-0.5">
+                廠內機台全數閒置中，立即點擊開啟【合約公告板】承接新晶圓訂單投產！
+              </div>
+            </div>
+          </div>
+          <button id="btn-order-cta" class="btn-sci-fi text-xs font-bold py-2 px-4 bg-gradient-to-r from-amber-600 to-cyan-600 hover:from-amber-500 hover:to-cyan-500 text-white shadow-lg flex-shrink-0 animate-pulse">
+            🚀 立即承接訂單 (Open Contracts)
+          </button>
         </div>
+      `;
+
+      document.getElementById('hud-order-status-bar')?.addEventListener('click', () => {
+        SoundEffects.playClick();
+        this.openContracts();
+      });
+      return;
+    }
+
+    const order = this.state.activeOrders[0];
+    const orderLots = this.state.activeLots.filter(l => l.orderId === order.id);
+    const activeLot = orderLots.find(l => l.status === 'PROCESSING') || orderLots[0];
+
+    const delivered = order.goodDiesDelivered;
+    const total = order.totalDies;
+    const pct = Math.min(100, Math.round((delivered / Math.max(1, total)) * 100));
+
+    const currentLayer = activeLot ? activeLot.currentLayer : 1;
+    const totalLayers = activeLot ? activeLot.totalLayers : (order.layerCount || 10);
+    const currentStation = activeLot ? activeLot.currentStation : 'FILM';
+    const currentSubStep = activeLot ? activeLot.litSubStep : undefined;
+
+    // 判定當前對應機台
+    let targetCategory: string = currentStation;
+    if (currentStation === 'LIT') {
+      if (currentSubStep === 'COAT' || currentSubStep === 'DEVELOP') {
+        targetCategory = 'TRACK';
+      } else {
+        targetCategory = 'LITHO';
+      }
+    }
+    const currentMachine = this.state.machines.find(m => m.category === targetCategory);
+
+    // Q-Time 倒數指示
+    let qTimeHtml = '';
+    if (activeLot && activeLot.qTimeDeadline) {
+      const qRemaining = Math.max(0, Math.round(activeLot.qTimeDeadline - this.state.gameTime));
+      const isUrgent = qRemaining <= 15;
+      qTimeHtml = `
+        <span class="px-2 py-0.5 rounded text-[11px] font-mono font-bold ${isUrgent ? 'bg-red-950 text-red-300 border border-red-500/50 animate-pulse' : 'bg-amber-950 text-amber-300 border border-amber-500/30'}">
+          ⏱️ Q-Time: ${qRemaining}s
+        </span>
       `;
     }
 
-    document.getElementById('hud-production-ticker')?.addEventListener('click', () => {
+    // 全機台流程 Pipeline
+    const hasCmp = this.state.unlockedFeatures.cmp;
+    const pipeline = [
+      { key: 'FILM', name: '薄膜沉積', en: 'FILM', icon: '🧪', match: (st: string, _sub?: string) => st === 'FILM' },
+      { key: 'TRACK_COAT', name: '光阻塗膠', en: 'TRACK', icon: '🌀', match: (st: string, sub?: string) => st === 'LIT' && sub === 'COAT' },
+      { key: 'LITHO', name: '微影曝光', en: 'LITHO', icon: '🔬', match: (st: string, sub?: string) => st === 'LIT' && sub === 'EXPOSE' },
+      { key: 'TRACK_DEV', name: '顯影烘烤', en: 'DEVELOP', icon: '♨️', match: (st: string, sub?: string) => st === 'LIT' && sub === 'DEVELOP' },
+      { key: 'ETCH', name: '電漿蝕刻', en: 'ETCH', icon: '⚡', match: (st: string, _sub?: string) => st === 'ETCH' },
+      { key: 'DIFF', name: '高溫擴散', en: 'DIFF', icon: '🔥', match: (st: string, _sub?: string) => st === 'DIFF' },
+    ];
+    if (hasCmp) {
+      pipeline.push({ key: 'CMP', name: '平坦化研磨', en: 'CMP', icon: '💎', match: (st: string) => st === 'CMP' });
+    }
+
+    let activePipelineIdx = -1;
+    if (activeLot && activeLot.status === 'PROCESSING') {
+      activePipelineIdx = pipeline.findIndex(step => step.match(activeLot.currentStation, activeLot.litSubStep));
+    }
+
+    const isAllDone = order.goodDiesDelivered >= order.totalDies || (orderLots.length > 0 && orderLots.every(l => l.status === 'COMPLETED'));
+
+    container.innerHTML = `
+      <div id="hud-order-status-bar" class="hud-order-bar cursor-pointer" title="點擊檢視訂單詳情與批次資訊">
+        <!-- 上方：訂單資訊、良品產能、機台指派與動作按鈕 -->
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-lg bg-cyan-950/80 border border-cyan-500/40 flex items-center justify-center text-lg flex-shrink-0 text-cyan-400">
+              ⚙️
+            </div>
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="font-bold text-white text-sm">【${order.clientName}】</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-950 text-cyan-300 border border-cyan-500/40">
+                  ${order.nodeNm}nm 工藝
+                </span>
+                <span class="text-xs text-slate-300 font-mono">
+                  第 <strong class="text-cyan-300">${currentLayer}</strong> / ${totalLayers} 層
+                </span>
+                ${this.state.activeOrders.length > 1 ? `<span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300 font-mono">共 ${this.state.activeOrders.length} 筆在製</span>` : ''}
+              </div>
+              <div class="text-xs text-slate-400 flex items-center gap-2 mt-0.5 font-mono flex-wrap">
+                <span>交付進度: <strong class="text-amber-300">${delivered} / ${total} 顆</strong> (${pct}%)</span>
+                <span class="text-slate-600">|</span>
+                <span>所在機台: <strong class="${currentMachine?.status === 'EXPLODED' ? 'text-red-400 font-bold animate-pulse' : 'text-cyan-300'}">📍 ${currentMachine ? currentMachine.name : '產線調度中'}</strong></span>
+                ${qTimeHtml}
+              </div>
+            </div>
+          </div>
+
+          <!-- 右側狀態與按鈕 -->
+          <div class="flex items-center gap-2">
+            ${isAllDone ? `
+              <button id="btn-bar-action" class="btn-sci-fi text-xs py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold animate-bounce shadow-md shadow-emerald-500/30">
+                📦 晶圓已完工！出貨結算
+              </button>
+            ` : `
+              <button id="btn-bar-action" class="btn-sci-fi text-xs py-1.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200">
+                📋 訂單與工單詳情
+              </button>
+            `}
+          </div>
+        </div>
+
+        <!-- 進度條 -->
+        <div class="w-full bg-slate-950/80 rounded-full h-1.5 overflow-hidden border border-slate-800">
+          <div class="bg-gradient-to-r from-cyan-500 to-emerald-400 h-full rounded-full transition-all duration-300" style="width: ${pct}%"></div>
+        </div>
+
+        <!-- 下方：全機台流程 Pipeline -->
+        <div class="flex items-center gap-1.5 w-full overflow-x-auto pt-1">
+          ${pipeline.map((step, idx) => {
+            let statusClass = 'step-waiting';
+            let statusText = '待加工';
+            let statusColor = 'text-slate-500';
+
+            if (isAllDone) {
+              statusClass = 'step-completed';
+              statusText = '✓ 完工';
+              statusColor = 'text-emerald-400';
+            } else if (idx < activePipelineIdx) {
+              statusClass = 'step-completed';
+              statusText = '✓ 完工';
+              statusColor = 'text-emerald-400';
+            } else if (idx === activePipelineIdx) {
+              statusClass = 'step-active';
+              statusText = '⚡ 加工中';
+              statusColor = 'text-cyan-300 font-bold';
+            }
+
+            const targetCat = step.key.startsWith('TRACK') ? 'TRACK' : (step.key === 'LITHO' ? 'LITHO' : step.key);
+            const m = this.state.machines.find(mach => mach.category === targetCat);
+            const isExploded = m?.status === 'EXPLODED';
+
+            return `
+              <div class="pipeline-step ${statusClass} ${isExploded ? 'border-red-500/80 bg-red-950/30' : ''}" title="${step.name} (${step.en})${m ? ' - ' + m.name : ''}">
+                <div class="flex items-center gap-1 text-xs">
+                  <span>${step.icon}</span>
+                  <span class="font-bold text-white text-[11px] truncate">${step.name}</span>
+                </div>
+                <div class="flex items-center justify-between w-full px-1 text-[10px] mt-0.5">
+                  <span class="font-mono text-slate-400 text-[9px]">${step.en}</span>
+                  <span class="${isExploded ? 'text-red-400 font-bold animate-pulse' : statusColor}">
+                    ${isExploded ? '💥故障' : statusText}
+                  </span>
+                </div>
+              </div>
+              ${idx < pipeline.length - 1 ? '<span class="text-slate-600 text-xs flex-shrink-0 font-bold">➔</span>' : ''}
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+
+    document.getElementById('hud-order-status-bar')?.addEventListener('click', () => {
       SoundEffects.playClick();
       this.openContracts();
     });

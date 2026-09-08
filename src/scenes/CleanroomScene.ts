@@ -31,6 +31,7 @@ export class CleanroomScene extends Phaser.Scene {
       tpmText?: Phaser.GameObjects.Text;
       processingText?: Phaser.GameObjects.Text;
       sprite?: Phaser.GameObjects.Image;
+      fallback?: Phaser.GameObjects.Graphics;
     }
   > = new Map();
 
@@ -58,6 +59,8 @@ export class CleanroomScene extends Phaser.Scene {
   private isDragging = false;
   private dragStartX = 0;
   private dragStartY = 0;
+  private totalDragDistance = 0;
+  private readonly dragThreshold = 6;
   private onMachineClickCallback?: (machine: MachineData) => void;
 
   constructor() {
@@ -70,6 +73,14 @@ export class CleanroomScene extends Phaser.Scene {
   }
 
   public preload(): void {
+    // 監聽載入完成，若機台貼圖稍晚下載完畢即刻升級畫面
+    this.load.on('complete', () => {
+      this.refreshMachineSprites();
+    });
+    this.load.on('loaderror', (fileObj: any) => {
+      console.warn('⚠️ 貼圖載入失敗:', fileObj?.key, fileObj?.url);
+    });
+
     // 預先載入所有機台貼圖
     for (const [key, item] of Object.entries(ASSET_REGISTRY.machines)) {
       if (!this.textures.exists(key)) {
@@ -81,6 +92,26 @@ export class CleanroomScene extends Phaser.Scene {
     for (const [key, item] of Object.entries(ASSET_REGISTRY.characters)) {
       if (!this.textures.exists(key) && (item as any).path) {
         this.load.image(key, (item as any).path);
+      }
+    }
+  }
+
+  /**
+   * 當貼圖資源載入完成時，無縫將所有備援幾何體升級為 2.5D 精美 Sprite
+   */
+  public refreshMachineSprites(): void {
+    for (const machine of this.saveGame.machines) {
+      const entry = this.machineMap.get(machine.id);
+      if (entry && !entry.sprite && this.textures.exists(machine.modelId)) {
+        if (entry.fallback) {
+          entry.fallback.destroy();
+          entry.fallback = undefined;
+        }
+        const sprite = this.add.image(0, -35, machine.modelId);
+        const targetSize = this.tileWidth * 0.95;
+        sprite.setDisplaySize(targetSize, targetSize);
+        entry.container.addAt(sprite, 1);
+        entry.sprite = sprite;
       }
     }
   }
@@ -229,16 +260,15 @@ export class CleanroomScene extends Phaser.Scene {
 
         // 2. 機台 Sprite 或程序化高科技立方體貼圖
         let sprite: Phaser.GameObjects.Image | undefined;
+        let fallback: Phaser.GameObjects.Graphics | undefined;
         if (this.textures.exists(machine.modelId)) {
           sprite = this.add.image(0, -35, machine.modelId);
-          // 縮放以符合等角地磚大小
-          const maxDim = Math.max(sprite.width, sprite.height);
-          const scale = (this.tileWidth * 1.1) / Math.max(1, maxDim);
-          sprite.setScale(scale);
+          const targetSize = this.tileWidth * 0.95;
+          sprite.setDisplaySize(targetSize, targetSize);
           container.add(sprite);
         } else {
           // 備援：精緻 2.5D 高科技機台立方體
-          const fallback = this.createFallbackMachineGraphic(machine);
+          fallback = this.createFallbackMachineGraphic(machine);
           container.add(fallback);
         }
 
@@ -293,25 +323,43 @@ export class CleanroomScene extends Phaser.Scene {
         }
 
         // 7. 互動點擊事件
-        container.setSize(this.tileWidth * 0.8, this.tileHeight * 1.8);
+        container.setSize(this.tileWidth * 0.85, this.tileHeight * 1.8);
         container.setInteractive({ useHandCursor: true });
 
         container.on('pointerover', () => {
-          if (sprite) sprite.setTint(0x38bdf8);
+          const currentEntry = this.machineMap.get(machine.id);
+          if (currentEntry?.sprite) currentEntry.sprite.setTint(0x38bdf8);
         });
         container.on('pointerout', () => {
-          if (sprite) sprite.clearTint();
+          const currentEntry = this.machineMap.get(machine.id);
+          if (currentEntry?.sprite) currentEntry.sprite.clearTint();
         });
-        container.on('pointerdown', () => {
-          SoundEffects.playClick();
-          if (this.onMachineClickCallback) {
-            this.onMachineClickCallback(machine);
+        container.on('pointerup', (_pointer: Phaser.Input.Pointer) => {
+          // 只有在非拖曳 (位移 <= 閾值) 狀況下才視為點擊機台，防止拖曳鏡頭時誤開面板
+          if (this.totalDragDistance <= this.dragThreshold) {
+            SoundEffects.playClick();
+            if (this.onMachineClickCallback) {
+              this.onMachineClickCallback(machine);
+            }
           }
         });
 
-        this.machineMap.set(machine.id, { container, ledArc, label, tpmText, processingText, sprite });
+        this.machineMap.set(machine.id, { container, ledArc, label, tpmText, processingText, sprite, fallback });
       } else {
         // 更新現有機台狀態與 LED
+        // 如果之前是 fallback，但現在貼圖已就緒，即刻升級為 2.5D 精美 Sprite
+        if (!entry.sprite && this.textures.exists(machine.modelId)) {
+          if (entry.fallback) {
+            entry.fallback.destroy();
+            entry.fallback = undefined;
+          }
+          const sprite = this.add.image(0, -35, machine.modelId);
+          const targetSize = this.tileWidth * 0.95;
+          sprite.setDisplaySize(targetSize, targetSize);
+          entry.container.addAt(sprite, 1);
+          entry.sprite = sprite;
+        }
+
         entry.ledArc.setFillStyle(this.getLEDColor(machine.status));
         entry.label.setText(`${machine.name} (${Math.round(machine.wear)}%)`);
 
@@ -590,29 +638,50 @@ export class CleanroomScene extends Phaser.Scene {
   }
 
   /**
-   * 滑鼠拖曳平移與滾輪縮放
+   * 滑鼠拖曳平移與滾輪縮放 (含拖曳死區與游標防呆)
    */
   private setupCameraControls(): void {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.button === 0) {
+      if (pointer.leftButtonDown()) {
         this.isDragging = true;
         this.dragStartX = pointer.x;
         this.dragStartY = pointer.y;
+        this.totalDragDistance = 0;
       }
     });
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (this.isDragging) {
+        if (!pointer.isDown || !pointer.leftButtonDown()) {
+          this.isDragging = false;
+          return;
+        }
+
         const dx = pointer.x - this.dragStartX;
         const dy = pointer.y - this.dragStartY;
-        this.cameras.main.scrollX -= dx / this.cameras.main.zoom;
-        this.cameras.main.scrollY -= dy / this.cameras.main.zoom;
+        this.totalDragDistance += Math.hypot(dx, dy);
+
+        // 超過 deadzone 閾值才平移視角，避免點擊機台時微震動引發鏡頭飄移
+        if (this.totalDragDistance > this.dragThreshold) {
+          const damp = 0.85; // 阻尼係數，防止滑鼠移動過度敏感
+          this.cameras.main.scrollX -= (dx * damp) / this.cameras.main.zoom;
+          this.cameras.main.scrollY -= (dy * damp) / this.cameras.main.zoom;
+        }
+
         this.dragStartX = pointer.x;
         this.dragStartY = pointer.y;
       }
     });
 
     this.input.on('pointerup', () => {
+      this.isDragging = false;
+    });
+
+    // 全域防呆：游標在 DOM 元素放開或焦點移出視窗時，強制清空拖曳狀態，絕不讓畫面吸附跟隨滑鼠
+    window.addEventListener('mouseup', () => {
+      this.isDragging = false;
+    });
+    window.addEventListener('blur', () => {
       this.isDragging = false;
     });
 

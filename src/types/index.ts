@@ -16,6 +16,8 @@ export type StaffRank = 'Young Specialist' | 'Skilled Worker' | 'Senior Engineer
 
 export type ShiftMode = 'TWO_SHIFT' | 'THREE_SHIFT';
 
+export type WorkShift = 'DAY' | 'SWING' | 'NIGHT' | 'OFF';
+
 export type MachineStatus = 'IDLE' | 'PROCESSING' | 'MAINTENANCE' | 'EXPLODED';
 
 export type LotStatus = 'PROCESSING' | 'WAITING_QTIME' | 'TRANSPORTING' | 'SCRAPPED' | 'COMPLETED';
@@ -67,6 +69,7 @@ export interface StaffData {
   moduleSpecialty: MachineCategory;
   fatigue: number; // 0 ~ 100
   shiftMode: ShiftMode;
+  workShift?: WorkShift; // 'DAY' | 'SWING' | 'NIGHT' | 'OFF'
   assignedMachineId: string | null;
   salary: number;
 }

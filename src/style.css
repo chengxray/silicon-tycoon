@@ -277,32 +277,70 @@ img {
   margin-top: 1rem;
 }
 
-/* Bottom Floating Live Production Ticker */
-#hud-production-ticker {
+/* Persistent Floating Order Status Bar & Production Pipeline */
+#hud-order-status-bar {
   position: absolute;
-  bottom: 20px;
+  bottom: 14px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 50;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 20px;
-  background: rgba(10, 16, 32, 0.94);
+  width: calc(100% - 32px);
+  max-width: 1040px;
+  background: rgba(10, 16, 32, 0.95);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(6, 182, 212, 0.6);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.6), 0 0 20px rgba(6, 182, 212, 0.25);
-  border-radius: 9999px;
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(6, 182, 212, 0.4);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 25px rgba(6, 182, 212, 0.15);
+  border-radius: 14px;
+  padding: 10px 16px;
   color: #f8fafc;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
-#hud-production-ticker:hover {
-  border-color: #38bdf8;
-  background: rgba(14, 23, 46, 0.98);
-  box-shadow: 0 8px 30px rgba(6, 182, 212, 0.45);
+
+#hud-order-status-bar.order-empty {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  border-color: rgba(245, 158, 11, 0.6);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.7), 0 0 20px rgba(245, 158, 11, 0.2);
+}
+
+#hud-order-status-bar:hover {
+  border-color: rgba(56, 189, 248, 0.8);
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.8), 0 0 30px rgba(6, 182, 212, 0.3);
   transform: translateX(-50%) translateY(-2px);
+}
+
+.pipeline-step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 5px 6px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(51, 65, 85, 0.7);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 90px;
+}
+
+.pipeline-step.step-active {
+  background: linear-gradient(180deg, rgba(6, 182, 212, 0.25), rgba(8, 51, 68, 0.65));
+  border-color: #38bdf8;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.35);
+  transform: translateY(-2px);
+}
+
+.pipeline-step.step-completed {
+  background: rgba(6, 78, 59, 0.3);
+  border-color: rgba(16, 185, 129, 0.45);
+}
+
+.pipeline-step.step-waiting {
+  opacity: 0.55;
 }
 
 /* Visible Scrollbar Styling */

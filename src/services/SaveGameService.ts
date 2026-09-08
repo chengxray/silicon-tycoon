@@ -129,11 +129,12 @@ export class SaveGameService {
       staff: [
         {
           id: 'staff_1',
-          name: '林資深',
+          name: 'Alex Miller',
           rank: 'Skilled Worker',
           moduleSpecialty: 'LITHO',
           fatigue: 10,
           shiftMode: 'THREE_SHIFT',
+          workShift: 'DAY',
           assignedMachineId: 'mach_litho_1',
           salary: 60_000
         }
@@ -180,6 +181,9 @@ export class SaveGameService {
       if (rawV2) {
         const parsed = JSON.parse(rawV2);
         if (parsed.schemaVersion === 2) {
+          if (parsed.staff) {
+            parsed.staff = this.normalizeStaffData(parsed.staff);
+          }
           return parsed as SaveGameV2;
         }
       }
@@ -201,6 +205,35 @@ export class SaveGameService {
       console.error('LocalStorage 讀檔失敗:', err);
       return null;
     }
+  }
+
+  private static readonly ENGLISH_FIRST_NAMES = [
+    'Alex', 'David', 'Sarah', 'Kevin', 'Emily', 'Michael', 'Jessica', 'James', 
+    'Daniel', 'Rachel', 'Robert', 'Brian', 'Olivia', 'William', 'Sophia', 'Thomas'
+  ];
+  private static readonly ENGLISH_LAST_NAMES = [
+    'Miller', 'Chen', 'Smith', 'Williams', 'Johnson', 'Taylor', 'Davis', 'Wilson',
+    'Anderson', 'White', 'Harris', 'Martin', 'Clark', 'Lewis', 'Walker', 'Hall'
+  ];
+
+  /**
+   * 確保員工姓名為國際通用英文名，並自動補齊預設輪班班別
+   */
+  public static normalizeStaffData(staffList: StaffData[]): StaffData[] {
+    return staffList.map((s, idx) => {
+      const hasChinese = /[\u4e00-\u9fa5]/.test(s.name);
+      let name = s.name;
+      if (hasChinese || !name) {
+        const first = this.ENGLISH_FIRST_NAMES[idx % this.ENGLISH_FIRST_NAMES.length];
+        const last = this.ENGLISH_LAST_NAMES[idx % this.ENGLISH_LAST_NAMES.length];
+        name = `${first} ${last}`;
+      }
+      return {
+        ...s,
+        name,
+        workShift: s.workShift || (idx % 3 === 0 ? 'DAY' : idx % 3 === 1 ? 'SWING' : 'NIGHT')
+      };
+    });
   }
 
   /**
@@ -247,7 +280,7 @@ export class SaveGameService {
         bayGridSize: v1.facility.bayGridSize ?? { width: 8, height: 8 }
       },
       machines: upgradedMachines,
-      staff: v1.staff ?? [],
+      staff: this.normalizeStaffData(v1.staff ?? []),
       activeOrders: upgradedOrders,
       activeLots: v1.activeLots ?? [],
       rollingYieldHistory: v1.rollingYieldHistory ?? [],

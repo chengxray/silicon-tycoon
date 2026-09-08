@@ -6,7 +6,7 @@
  * 3. 廠務班別切換（兩班制省錢 vs 三班制解鎖 🛡️ TPM 24H 零故障在線維護）
  */
 
-import { SaveGameV2, StaffData, StaffRank, MachineCategory, ShiftMode } from '../types';
+import { SaveGameV2, StaffData, StaffRank, MachineCategory, ShiftMode, WorkShift } from '../types';
 import { SoundEffects } from '../audio/SoundEffects';
 import { AchievementEngine } from '../engine/AchievementEngine';
 import { MaintenanceEngine } from '../engine/MaintenanceEngine';
@@ -22,8 +22,20 @@ interface Candidate {
 }
 
 export class HRModal {
-  private static activeTab: 'MARKET' | 'STAFF' = 'STAFF';
+  private static activeTab: 'STAFF' | 'SCHEDULE' | 'MARKET' = 'STAFF';
   private static candidates: Candidate[] = [];
+
+  private static readonly FIRST_NAMES = [
+    'Alex', 'David', 'Sarah', 'Kevin', 'Emily', 'Michael', 'Jessica', 'James',
+    'Daniel', 'Rachel', 'Robert', 'Brian', 'Olivia', 'William', 'Sophia', 'Thomas',
+    'Emma', 'Chris', 'Grace', 'Eric', 'Lucas', 'Chloe', 'Nathan', 'Hannah'
+  ];
+
+  private static readonly LAST_NAMES = [
+    'Miller', 'Chen', 'Smith', 'Williams', 'Johnson', 'Taylor', 'Davis', 'Wilson',
+    'Anderson', 'White', 'Harris', 'Martin', 'Clark', 'Lewis', 'Walker', 'Hall',
+    'Young', 'Allen', 'King', 'Wright', 'Scott', 'Torres', 'Nguyen', 'Hill'
+  ];
 
   public static show(state: SaveGameV2, onUpdate: () => void): void {
     const container = document.getElementById('modal-container');
@@ -37,16 +49,14 @@ export class HRModal {
   }
 
   private static generateCandidates(foundryTier: number): void {
-    const surnames = ['林', '陳', '黃', '張', '李', '王', '吳', '劉', '蔡', '楊', '許', '鄭', '謝', '洪', '郭'];
-    const givenNames = ['冠宇', '家豪', '博智', '欣宜', '雅婷', '立群', '崇德', '柏翰', '建良', '哲瑋', '俊廷', '文傑'];
     const specialties: MachineCategory[] = ['LITHO', 'TRACK', 'FILM', 'ETCH', 'DIFF', 'CMP'];
 
     this.candidates = [];
 
-    // 依世代產生合適的職等候選人
+    // 依世代產生合適的職等候選人 (英美常見姓名)
     for (let i = 0; i < 4; i++) {
-      const surname = surnames[Math.floor(Math.random() * surnames.length)];
-      const given = givenNames[Math.floor(Math.random() * givenNames.length)];
+      const first = this.FIRST_NAMES[Math.floor(Math.random() * this.FIRST_NAMES.length)];
+      const last = this.LAST_NAMES[Math.floor(Math.random() * this.LAST_NAMES.length)];
       const spec = specialties[Math.floor(Math.random() * specialties.length)];
 
       let rank: StaffRank = 'Young Specialist';
@@ -74,7 +84,7 @@ export class HRModal {
 
       this.candidates.push({
         id: `CAN-${Date.now().toString(36).slice(-4)}-${i}`,
-        name: `${surname}${given}`,
+        name: `${first} ${last}`,
         rank,
         moduleSpecialty: spec,
         signingBonus,
@@ -150,16 +160,25 @@ export class HRModal {
           <div class="flex border-b border-slate-700/60 bg-slate-900/40 px-6 pt-2 flex-shrink-0">
             <button
               id="tab-staff"
-              class="px-4 py-2 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 ${
+              class="px-4 py-2 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
                 this.activeTab === 'STAFF' ? 'border-purple-400 text-purple-300' : 'border-transparent text-slate-400 hover:text-slate-200'
               }"
             >
-              <span>🧑‍🔬 現役廠務工程師</span>
+              <span>🧑‍🔬 全部員工列表</span>
               <span class="px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] font-mono">${state.staff.length}</span>
             </button>
             <button
+              id="tab-schedule"
+              class="px-4 py-2 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+                this.activeTab === 'SCHEDULE' ? 'border-purple-400 text-purple-300' : 'border-transparent text-slate-400 hover:text-slate-200'
+              }"
+            >
+              <span>📅 廠務排班表</span>
+              <span class="px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] font-mono text-cyan-400">${state.staff.length}人排班</span>
+            </button>
+            <button
               id="tab-market"
-              class="px-4 py-2 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 ${
+              class="px-4 py-2 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
                 this.activeTab === 'MARKET' ? 'border-purple-400 text-purple-300' : 'border-transparent text-slate-400 hover:text-slate-200'
               }"
             >
@@ -176,9 +195,12 @@ export class HRModal {
 
           <!-- Body -->
           <div class="modal-body p-6 overflow-y-auto flex-1 space-y-4">
-            ${this.activeTab === 'STAFF'
-              ? this.renderStaffTab(state)
-              : this.renderMarketTab(state)
+            ${
+              this.activeTab === 'STAFF'
+                ? this.renderStaffTab(state)
+                : this.activeTab === 'SCHEDULE'
+                ? this.renderScheduleTab(state)
+                : this.renderMarketTab(state)
             }
           </div>
 
@@ -194,6 +216,163 @@ export class HRModal {
     `;
 
     this.bindEvents(container, state, onUpdate);
+  }
+
+  private static renderScheduleTab(state: SaveGameV2): string {
+    if (state.staff.length === 0) {
+      return `
+        <div class="text-center py-12 text-slate-400">
+          <div class="text-4xl mb-2">📅</div>
+          <p class="text-sm">廠內目前尚未招募任何員工，無法進行排班！請先前往「人才招募市場」進行招聘。</p>
+        </div>
+      `;
+    }
+
+    const dayCount = state.staff.filter(s => (s.workShift || 'DAY') === 'DAY').length;
+    const swingCount = state.staff.filter(s => s.workShift === 'SWING').length;
+    const nightCount = state.staff.filter(s => s.workShift === 'NIGHT').length;
+    const offCount = state.staff.filter(s => s.workShift === 'OFF').length;
+
+    const has24HCoverage = dayCount > 0 && swingCount > 0 && nightCount > 0;
+
+    return `
+      <div class="space-y-4">
+        <!-- 輪班健康度與 24H 覆蓋看板 -->
+        <div class="p-4 rounded-xl bg-slate-900/90 border ${has24HCoverage ? 'border-emerald-500/50 bg-emerald-950/20' : 'border-amber-500/40 bg-amber-950/10'} flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-base">${has24HCoverage ? '🛡️' : '⚠️'}</span>
+              <span class="text-sm font-bold ${has24HCoverage ? 'text-emerald-300' : 'text-amber-300'}">
+                ${has24HCoverage ? '全廠 24H 輪班完整覆蓋 (達成 TPM 零故障保護條件)' : '全廠 24H 輪班存在時段空窗'}
+              </span>
+            </div>
+            <p class="text-xs text-slate-400 mt-1">
+              ${has24HCoverage 
+                ? '早班、中班與大夜班均有人員駐守，只要機台專長職等符合且疲勞 < 50%，即可維持 0% 故障率！' 
+                : '注意：若某個班別缺少工程師值班，在該時段機台將無法享受在線預防保養，磨損率將正常累積！'}
+            </p>
+          </div>
+
+          <!-- 各班人數統計膠囊 -->
+          <div class="flex items-center gap-2 text-xs font-mono">
+            <span class="px-2.5 py-1 rounded-lg bg-sky-950 text-sky-300 border border-sky-500/30">
+              ☀️ 早班: ${dayCount}
+            </span>
+            <span class="px-2.5 py-1 rounded-lg bg-amber-950 text-amber-300 border border-amber-500/30">
+              🌆 中班: ${swingCount}
+            </span>
+            <span class="px-2.5 py-1 rounded-lg bg-indigo-950 text-indigo-300 border border-indigo-500/30">
+              🌙 夜班: ${nightCount}
+            </span>
+            <span class="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-400 border border-slate-700">
+              🏖️ 排休: ${offCount}
+            </span>
+          </div>
+        </div>
+
+        <!-- 快捷一鍵排班操作欄 -->
+        <div class="flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg bg-slate-950/60 border border-slate-800 text-xs">
+          <span class="text-slate-400 font-medium">快捷排班輔助工具：</span>
+          <div class="flex items-center gap-2">
+            <button id="btn-preset-balanced" class="btn-sci-fi text-xs py-1 px-3 bg-cyan-900/50 hover:bg-cyan-800/60 border-cyan-500/40">
+              🔄 一鍵均衡三班制
+            </button>
+            <button id="btn-preset-day-only" class="btn-sci-fi text-xs py-1 px-3 bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300">
+              ☀️ 一鍵集中早班
+            </button>
+            <button id="btn-preset-tpm-opt" class="btn-sci-fi text-xs py-1 px-3 bg-emerald-900/50 hover:bg-emerald-800/60 border-emerald-500/40 text-emerald-200 font-bold">
+              🛡️ TPM 最佳化排班
+            </button>
+          </div>
+        </div>
+
+        <!-- 全體員工手動班表矩陣 -->
+        <div class="space-y-2.5">
+          ${state.staff.map((staff) => {
+            const currentShift = staff.workShift || 'DAY';
+            const assignedMachine = state.machines.find(m => m.id === staff.assignedMachineId);
+
+            return `
+              <div class="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center text-xl flex-shrink-0">
+                    🧑‍🔬
+                  </div>
+                  <div>
+                    <div class="flex items-center gap-2">
+                      <span class="font-bold text-white text-sm">${staff.name}</span>
+                      <span class="px-2 py-0.5 rounded text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                        ${staff.rank}
+                      </span>
+                      <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-cyan-500/20 text-cyan-300">
+                        ${staff.moduleSpecialty}
+                      </span>
+                    </div>
+                    <div class="text-xs text-slate-400 mt-0.5 flex items-center gap-2 font-mono">
+                      <span>進駐: <strong class="text-slate-200">${assignedMachine ? assignedMachine.name : '待命未指派'}</strong></span>
+                      <span>|</span>
+                      <span>疲勞: <strong class="${staff.fatigue >= 50 ? 'text-red-400 font-bold' : (staff.fatigue >= 30 ? 'text-amber-400' : 'text-emerald-400')}">${Math.round(staff.fatigue)}%</strong></span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 手動班別切換按鈕組 -->
+                <div class="flex items-center gap-1.5 w-full md:w-auto justify-end">
+                  <button
+                    class="btn-shift-select px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      currentShift === 'DAY'
+                        ? 'bg-sky-600 text-white shadow-md shadow-sky-500/30 border border-sky-400'
+                        : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                    }"
+                    data-staff-id="${staff.id}"
+                    data-shift="DAY"
+                    title="早班: 07:00 ~ 15:00 (常規疲勞速率)"
+                  >
+                    ☀️ 早班 (07-15)
+                  </button>
+                  <button
+                    class="btn-shift-select px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      currentShift === 'SWING'
+                        ? 'bg-amber-600 text-white shadow-md shadow-amber-500/30 border border-amber-400'
+                        : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                    }"
+                    data-staff-id="${staff.id}"
+                    data-shift="SWING"
+                    title="中班: 15:00 ~ 23:00 (常規疲勞速率)"
+                  >
+                    🌆 中班 (15-23)
+                  </button>
+                  <button
+                    class="btn-shift-select px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      currentShift === 'NIGHT'
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30 border border-indigo-400'
+                        : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                    }"
+                    data-staff-id="${staff.id}"
+                    data-shift="NIGHT"
+                    title="夜班: 23:00 ~ 07:00 (夜班疲勞稍快，需定期輪替)"
+                  >
+                    🌙 夜班 (23-07)
+                  </button>
+                  <button
+                    class="btn-shift-select px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      currentShift === 'OFF'
+                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/30 border border-emerald-400'
+                        : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                    }"
+                    data-staff-id="${staff.id}"
+                    data-shift="OFF"
+                    title="排休: 暫停進駐機台，快速恢復體力與降低疲勞度"
+                  >
+                    🏖️ 排休 (OFF)
+                  </button>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
   }
 
   private static renderStaffTab(state: SaveGameV2): string {
@@ -389,10 +568,68 @@ export class HRModal {
       this.render(container, state, onUpdate);
     });
 
+    document.getElementById('tab-schedule')?.addEventListener('click', () => {
+      SoundEffects.playClick();
+      this.activeTab = 'SCHEDULE';
+      this.render(container, state, onUpdate);
+    });
+
     document.getElementById('tab-market')?.addEventListener('click', () => {
       SoundEffects.playClick();
       this.activeTab = 'MARKET';
       this.render(container, state, onUpdate);
+    });
+
+    // 快捷排班工具
+    document.getElementById('btn-preset-balanced')?.addEventListener('click', () => {
+      SoundEffects.playClick();
+      const shifts: WorkShift[] = ['DAY', 'SWING', 'NIGHT'];
+      state.staff.forEach((s, idx) => {
+        s.workShift = shifts[idx % 3];
+      });
+      onUpdate();
+      this.render(container, state, onUpdate);
+    });
+
+    document.getElementById('btn-preset-day-only')?.addEventListener('click', () => {
+      SoundEffects.playClick();
+      state.staff.forEach((s) => {
+        s.workShift = 'DAY';
+      });
+      onUpdate();
+      this.render(container, state, onUpdate);
+    });
+
+    document.getElementById('btn-preset-tpm-opt')?.addEventListener('click', () => {
+      SoundEffects.playClick();
+      const shifts: WorkShift[] = ['DAY', 'SWING', 'NIGHT'];
+      let activeIdx = 0;
+      state.staff.forEach((s) => {
+        if (s.fatigue >= 70) {
+          s.workShift = 'OFF';
+        } else {
+          s.workShift = shifts[activeIdx % 3];
+          activeIdx++;
+        }
+      });
+      onUpdate();
+      this.render(container, state, onUpdate);
+    });
+
+    // 手動班別按鈕切換
+    container.querySelectorAll('.btn-shift-select').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget as HTMLElement;
+        const staffId = target.getAttribute('data-staff-id');
+        const shift = target.getAttribute('data-shift') as WorkShift;
+        const staff = state.staff.find(s => s.id === staffId);
+        if (!staff || !shift) return;
+
+        staff.workShift = shift;
+        SoundEffects.playClick();
+        onUpdate();
+        this.render(container, state, onUpdate);
+      });
     });
 
     // 刷新市場履歷
@@ -445,6 +682,7 @@ export class HRModal {
           moduleSpecialty: can.moduleSpecialty,
           fatigue: 20,
           shiftMode: currentShift,
+          workShift: 'DAY',
           assignedMachineId: null,
           salary: can.salary
         };

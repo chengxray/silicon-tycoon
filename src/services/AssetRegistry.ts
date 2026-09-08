@@ -37,14 +37,7 @@ export const ASSET_REGISTRY = {
   characters: {
     tech_cleanroom: { path: './assets/characters/tech_cleanroom.png', label: 'Cleanroom Technician' },
     agv_carrier: { path: './assets/characters/agv_carrier.png', label: 'AGV Wafer Carrier' },
-    oht_shuttle: { path: './assets/characters/oht_shuttle.png', label: 'OHT Sky-Rail Shuttle' },
-    tech_walk: { path: './assets/characters/tech_walk.svg', frameWidth: 128, frameHeight: 128, frameCount: 4 },
-    tech_carry: { path: './assets/characters/tech_carry.svg', frameWidth: 128, frameHeight: 128, frameCount: 4 },
-    tech_pm: { path: './assets/characters/tech_pm.svg', frameWidth: 128, frameHeight: 128, frameCount: 4 },
-    tech_repair: { path: './assets/characters/tech_repair.svg', frameWidth: 128, frameHeight: 128, frameCount: 4 },
-    tech_fatigue: { path: './assets/characters/tech_fatigue.svg', frameWidth: 128, frameHeight: 128, frameCount: 4 },
-    agv_drive: { path: './assets/characters/agv_drive.svg', frameWidth: 128, frameHeight: 128, frameCount: 4 },
-    oht_shuttle_svg: { path: './assets/characters/oht_shuttle.svg', frameWidth: 128, frameHeight: 128, frameCount: 4 }
+    oht_shuttle: { path: './assets/characters/oht_shuttle.png', label: 'OHT Sky-Rail Shuttle' }
   },
 
   // 世代無塵室背景與等角地坪

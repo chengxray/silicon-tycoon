@@ -110,6 +110,19 @@ class FoundryGame {
         }
       }
 
+      // 1.1 員工疲勞度動態更新 (休假恢復 vs 上班累積)
+      for (const staff of this.state.staff) {
+        if (staff.workShift === 'OFF') {
+          // 排休中：迅速恢復疲勞
+          staff.fatigue = Math.max(0, staff.fatigue - 0.25);
+        } else {
+          // 出勤中：依兩班/三班與夜班乘數累積疲勞
+          const baseRate = staff.shiftMode === 'TWO_SHIFT' ? 0.05 : 0.02;
+          const shiftMultiplier = staff.workShift === 'NIGHT' ? 1.5 : 1.0;
+          staff.fatigue = Math.min(100, staff.fatigue + baseRate * shiftMultiplier);
+        }
+      }
+
       // 動態判定哪些站點正在加工，即時更新 machine.status (IDLE vs PROCESSING)
       const activeStations = new Set<string>();
       for (const lot of this.state.activeLots) {

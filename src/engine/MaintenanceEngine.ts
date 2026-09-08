@@ -66,6 +66,13 @@ export class MaintenanceEngine {
     }
 
     // 3. 疲勞與排班
+    if (engineer.workShift === 'OFF') {
+      return {
+        isTPMActive: false,
+        reason: '該工程師目前處於排休狀態 (OFF)，機台暫無在線工程師值班'
+      };
+    }
+
     if (engineer.fatigue >= 50) {
       return {
         isTPMActive: false,
@@ -82,7 +89,7 @@ export class MaintenanceEngine {
 
     return {
       isTPMActive: true,
-      reason: '🛡️ 滿足專長相符、資歷合規、三班輪調低疲勞，享有 24 小時不停機零故障保障！'
+      reason: '🛡️ 滿足專長相符、資歷合規、在線值勤且低疲勞，享有 24 小時不停機零故障保障！'
     };
   }
 

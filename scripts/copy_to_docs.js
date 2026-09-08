@@ -32,6 +32,21 @@ function copyDirRecursive(src, dest) {
   }
 }
 
+// 清理舊有的 docs/static 檔案避免殘留過期的 bundle 哈希
+try {
+  const docsStaticDir = path.join(docsDir, 'static');
+  if (fs.existsSync(docsStaticDir)) {
+    const files = fs.readdirSync(docsStaticDir);
+    for (const f of files) {
+      try {
+        fs.unlinkSync(path.join(docsStaticDir, f));
+      } catch (_) {}
+    }
+  }
+} catch (err) {
+  console.warn('⚠️ 清理舊靜態檔略過:', err.message);
+}
+
 copyDirRecursive(distDir, docsDir);
 
 // 確保 docs/.nojekyll 存在
