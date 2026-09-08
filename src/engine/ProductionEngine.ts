@@ -7,9 +7,9 @@
 import {
   WaferLotData,
   MachineData,
+  OrderData,
   StationType,
   LitSubStep,
-  OrderData,
   StaffData,
   UnlockedFeatures
 } from '../types';
@@ -47,22 +47,81 @@ export class ProductionEngine {
   /**
    * 基礎站點加工時間 (以遊戲秒為單位，常規 1x 下 1 遊戲秒 = 1 現實秒)
    */
+  /**
+   * 根據半導體各工藝站點之現實物理特性設定基礎加工時間 (秒)：
+   * - 高溫擴散/離子佈植 (DIFF): 16 秒 (高溫石英管升降溫與晶圓熱平衡最耗時)
+   * - 微影曝光掃描機 (LITHO EXPOSE): 12 秒 (奈米光學對位、雙工件台步進掃描)
+   * - 電漿乾式蝕刻 (ETCH): 12 秒 (真空抽氣、電漿輝光反應離子轟擊與光阻去膠)
+   * - 薄膜沉積 (FILM CVD/ALD): 10 秒 (前驅氣體流動、成膜厚度均勻化)
+   * - 化學機械平坦化 (CMP): 10 秒 (化學研磨液反應、研磨墊旋轉與超音波洗淨)
+   * - 顯影烘烤 (TRACK DEVELOP): 8 秒 (PEB 烘烤、顯影劑沖洗、純水沖淨)
+   * - 光阻塗膠 (TRACK COAT): 7 秒 (晶圓真空吸附、高速旋塗均勻化、去邊膠 EBR)
+   */
   public static readonly BASE_STATION_DURATION_SEC: Record<StationType, number> = {
-    FILM: 4,
-    LIT: 6, // 內部包含 COAT(2s) -> EXPOSE(2s) -> DEVELOP(2s)
-    ETCH: 4,
-    DIFF: 5,
-    CMP: 5
+    FILM: 10,
+    LIT: 27, // 總計: COAT(7) + EXPOSE(12) + DEVELOP(8)
+    ETCH: 12,
+    DIFF: 16,
+    CMP: 10
   };
 
   /**
-   * LIT 站內部各子步驟基礎耗時
+   * LIT 站內部各子步驟現實基礎耗時 (秒)
    */
   public static readonly LIT_SUBSTEP_DURATION_SEC: Record<LitSubStep, number> = {
-    COAT: 2,
-    EXPOSE: 2,
-    DEVELOP: 2
+    COAT: 7,
+    EXPOSE: 12,
+    DEVELOP: 8
   };
+
+  /**
+   * 判定指定地磚座標是否處於黃光專區 (Yellow Room)
+   */
+  public static isTileInYellowRoom(x: number, y: number, yellowRoomTiles?: { x: number; y: number }[]): boolean {
+    if (yellowRoomTiles && yellowRoomTiles.length > 0) {
+      return yellowRoomTiles.some(t => t.x === x && t.y === y);
+    }
+    // 預設區域保底 (如果舊存檔尚未劃設)
+    return y <= 3 && x >= 3 && x <= 7;
+  }
+
+  /**
+   * 檢查機台是否位於黃光專區
+   */
+  public static isMachineInYellowRoom(machine: MachineData, yellowRoomTiles?: { x: number; y: number }[]): boolean {
+    return this.isTileInYellowRoom(machine.gridX, machine.gridY, yellowRoomTiles);
+  }
+
+  /**
+   * 計算該站點/子步驟在當前機台與工程師條件下的實效所需秒數 (考量機台階級、磨損率與對口工程師)
+   */
+  public static getStationRequiredSeconds(
+    station: StationType,
+    litSubStep?: LitSubStep,
+    machine?: MachineData,
+    staff?: StaffData
+  ): number {
+    let baseSec = this.BASE_STATION_DURATION_SEC[station] || 10;
+    if (station === 'LIT' && litSubStep) {
+      baseSec = this.LIT_SUBSTEP_DURATION_SEC[litSubStep] || 10;
+    }
+
+    if (machine) {
+      // 越高階機台速度略快 (每 Tier -0.5s，最多減 2s)
+      baseSec -= Math.min(2, (machine.tier - 1) * 0.5);
+      // 機台磨損嚴重 (> 50%) 增加加工耗時 (最高 +3s)
+      if (machine.wear > 50) {
+        baseSec += Math.round(((machine.wear - 50) / 50) * 3);
+      }
+    }
+
+    if (staff && machine && staff.moduleSpecialty === machine.category && staff.fatigue < 80) {
+      // 專業對口工程師駐守加速 15% (約 -1 ~ 2s)
+      baseSec = Math.max(4, Math.round(baseSec * 0.85));
+    }
+
+    return Math.max(4, Math.round(baseSec));
+  }
 
   /**
    * 各站點在不同機台世代 (Tier 1 ~ 6) 之基礎產能 (單位：晶圓/分)
@@ -105,13 +164,13 @@ export class ProductionEngine {
     nodeNm: number,
     cleanroomClass: string
   ): number {
-    let baseWindowSec = 30; // 預設微影至蝕刻 30s
+    let baseWindowSec = 45; // 預設微影至蝕刻 45s
     if (fromStation === 'LIT' && toStation === 'ETCH') {
-      baseWindowSec = 30;
-    } else if (fromStation === 'ETCH' && toStation === 'DIFF') {
       baseWindowSec = 45;
+    } else if (fromStation === 'ETCH' && toStation === 'DIFF') {
+      baseWindowSec = 60;
     } else if (fromStation === 'CMP') {
-      baseWindowSec = 35;
+      baseWindowSec = 45;
     }
 
     // 潔淨室加成係數
@@ -140,8 +199,8 @@ export class ProductionEngine {
    */
   public static checkQTimeStatus(
     lot: WaferLotData,
-    currentOrder: OrderData,
-    currentGameTime: number
+    currentGameTime: number,
+    reworkCost: number = 50_000
   ): QTimeStatus {
     if (!lot.qTimeDeadline) {
       return {
@@ -157,15 +216,10 @@ export class ProductionEngine {
     }
 
     const remainingSec = lot.qTimeDeadline - currentGameTime;
+    const isLithoToEtch = lot.currentStation === 'ETCH';
 
-    if (remainingSec >= 0) {
-      // 安全或警戒期
-      let urgency: 'SAFE' | 'WARNING' | 'CRITICAL' = 'SAFE';
-      if (remainingSec <= 5) {
-        urgency = 'CRITICAL';
-      } else if (remainingSec <= 15) {
-        urgency = 'WARNING';
-      }
+    // 正常未逾時
+    if (remainingSec > 15) {
       return {
         isOverdue: false,
         overdueSeconds: 0,
@@ -173,28 +227,38 @@ export class ProductionEngine {
         canRework: false,
         reworkCost: 0,
         penaltyYieldRatio: 1.0,
-        urgencyLevel: urgency,
+        urgencyLevel: 'SAFE',
         remainingSeconds: remainingSec
       };
     }
 
-    // 逾期處理
+    // 警戒黃燈 (剩餘 <= 15s)
+    if (remainingSec > 0) {
+      return {
+        isOverdue: false,
+        overdueSeconds: 0,
+        isFatal: false,
+        canRework: false,
+        reworkCost: 0,
+        penaltyYieldRatio: 1.0,
+        urgencyLevel: 'WARNING',
+        remainingSeconds: remainingSec
+      };
+    }
+
+    // 已逾時
     const overdueSec = Math.abs(remainingSec);
-    const isLithoToEtch = lot.currentStation === 'ETCH' || (lot.currentStation === 'LIT' && lot.litSubStep === 'DEVELOP');
 
-    // 計算重洗 (Rework) 費用：訂單該層預估單片價值的 5%
-    const reworkCost = Math.round(currentOrder.unitPrice * (currentOrder.totalDies / Math.max(1, currentOrder.layerCount)) * 0.05 * (lot.waferCount / 25));
-
+    // 輕微逾時 (逾時 <= 15s)
     if (overdueSec <= 15) {
-      // 輕微延遲：良率懲罰扣減 35%
       return {
         isOverdue: true,
         overdueSeconds: overdueSec,
         isFatal: false,
-        canRework: isLithoToEtch,
-        reworkCost,
-        penaltyYieldRatio: 0.65,
-        urgencyLevel: 'EXPIRED',
+        canRework: false,
+        reworkCost: 0,
+        penaltyYieldRatio: 0.65, // 良率永久折損 35%
+        urgencyLevel: 'CRITICAL',
         remainingSeconds: 0
       };
     }
@@ -246,17 +310,36 @@ export class ProductionEngine {
 
   /**
    * 推進晶圓批次至下一個製程站點或子步驟 (Option B 流動模型)
+   * 包含：黃光微影專區光學檢驗 (Scanner 未在黃光區則該批良率歸零)
    */
   public static advanceLotStation(
     lot: WaferLotData,
     hasCmpUnlocked: boolean,
     nodeNm: number,
     cleanroomClass: string,
-    currentGameTime: number
+    currentGameTime: number,
+    machines?: MachineData[],
+    yellowRoomTiles?: { x: number; y: number }[]
   ): { nextStation: StationType; nextSubStep?: LitSubStep; isLayerCompleted: boolean; isLotCompleted: boolean } {
     const sequence = this.getStationSequence(hasCmpUnlocked);
 
-    // 處理 LIT 站內部三子步驟：COAT -> EXPOSE -> DEVELOP
+    // 1. 微影與光阻黃光防護驗證 (若微影機或塗膠顯影機沒在黃光區，則白光曝光光阻失效，良率歸零！)
+    if (machines && yellowRoomTiles) {
+      if (lot.currentStation === 'LIT') {
+        const litho = machines.find(m => m.category === 'LITHO');
+        const track = machines.find(m => m.category === 'TRACK');
+
+        if (lot.litSubStep === 'EXPOSE' && litho && !this.isMachineInYellowRoom(litho, yellowRoomTiles)) {
+          lot.yieldMultiplier = 0.0;
+          lot.hasYellowRoomViolation = true;
+        } else if ((lot.litSubStep === 'COAT' || lot.litSubStep === 'DEVELOP') && track && !this.isMachineInYellowRoom(track, yellowRoomTiles)) {
+          lot.yieldMultiplier = 0.0;
+          lot.hasYellowRoomViolation = true;
+        }
+      }
+    }
+
+    // 2. 處理 LIT 站內部三子步驟：COAT -> EXPOSE -> DEVELOP
     if (lot.currentStation === 'LIT') {
       if (!lot.litSubStep || lot.litSubStep === 'COAT') {
         lot.litSubStep = 'EXPOSE';
@@ -276,7 +359,7 @@ export class ProductionEngine {
       }
     }
 
-    // 處理其他主站點
+    // 3. 處理其他主站點
     const currentIndex = sequence.indexOf(lot.currentStation);
     if (currentIndex >= 0 && currentIndex < sequence.length - 1) {
       const next = sequence[currentIndex + 1];
@@ -287,7 +370,7 @@ export class ProductionEngine {
 
       // 檢查是否需要賦予 Q-Time 死線
       if (lot.currentStation === 'DIFF') {
-        // ETCH -> DIFF 具備 45s Q-Time
+        // ETCH -> DIFF 具備 Q-Time
         const qTimeSec = this.calculateEffectiveQTimeSec('ETCH', 'DIFF', nodeNm, cleanroomClass);
         lot.qTimeDeadline = currentGameTime + qTimeSec;
       } else {
@@ -297,7 +380,7 @@ export class ProductionEngine {
       return { nextStation: next, isLayerCompleted: false, isLotCompleted: false };
     }
 
-    // 已達到該層最後一站 (DIFF 或 CMP)，層數結算
+    // 4. 已達到該層最後一站 (DIFF 或 CMP)，層數結算
     if (lot.currentLayer < lot.totalLayers) {
       lot.currentLayer += 1;
       lot.currentStation = 'FILM';
@@ -306,7 +389,7 @@ export class ProductionEngine {
       return { nextStation: 'FILM', isLayerCompleted: true, isLotCompleted: false };
     }
 
-    // 全層數完工！
+    // 5. 全層數完工！
     lot.status = 'COMPLETED';
     lot.qTimeDeadline = null;
     return { nextStation: lot.currentStation, isLayerCompleted: true, isLotCompleted: true };

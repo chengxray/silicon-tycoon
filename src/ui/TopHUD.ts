@@ -22,6 +22,7 @@ export interface TopHUDCallbacks {
   onOpenTutorial?: () => void;
   onOpenFinance?: () => void;
   onOpenLogin?: () => void;
+  onOpenPlanner?: () => void;
 }
 
 export class TopHUD {
@@ -168,6 +169,11 @@ export class TopHUD {
           👥 人資
         </button>
 
+        <!-- 廠房規劃 -->
+        <button id="btn-planner" class="btn-sci-fi text-xs bg-amber-950/40 border-amber-500/50 text-amber-300 hover:text-white" title="規劃機台擺放與劃設黃光微影專區">
+          🏗️ 廠房規劃
+        </button>
+
         <!-- 每日任務 -->
         <button id="btn-quests" class="btn-sci-fi relative text-xs">
           📋 任務
@@ -202,65 +208,83 @@ export class TopHUD {
       </div>
     `;
 
-    // 綁定按鈕事件
-    document.getElementById('btn-contracts')?.addEventListener('click', () => {
+    // 綁定按鈕事件 (全數呼叫 stopPropagation，杜絕穿透)
+    document.getElementById('btn-contracts')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       SoundEffects.playClick();
       this.callbacks.onOpenContracts();
     });
 
-    document.getElementById('btn-store')?.addEventListener('click', () => {
+    document.getElementById('btn-store')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       SoundEffects.playClick();
       this.callbacks.onOpenStore();
     });
 
-    document.getElementById('btn-hr')?.addEventListener('click', () => {
+    document.getElementById('btn-hr')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       SoundEffects.playClick();
       this.callbacks.onOpenHR();
     });
 
-    document.getElementById('btn-quests')?.addEventListener('click', () => {
+    document.getElementById('btn-planner')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      SoundEffects.playClick();
+      this.callbacks.onOpenPlanner?.();
+    });
+
+    document.getElementById('btn-quests')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       SoundEffects.playClick();
       this.callbacks.onOpenQuests();
     });
 
-    document.getElementById('btn-achievements')?.addEventListener('click', () => {
+    document.getElementById('btn-achievements')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       SoundEffects.playClick();
       this.callbacks.onOpenAchievements();
     });
 
-    document.getElementById('btn-advisory-alert')?.addEventListener('click', () => {
+    document.getElementById('btn-advisory-alert')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       SoundEffects.playClick();
       this.callbacks.onOpenAdvisory();
     });
 
     // 財報按鈕與資金卡片點擊
-    document.getElementById('btn-finance')?.addEventListener('click', () => {
+    document.getElementById('btn-finance')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       SoundEffects.playClick();
       this.callbacks.onOpenFinance?.();
     });
 
-    document.getElementById('btn-hud-cash')?.addEventListener('click', () => {
+    document.getElementById('btn-hud-cash')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       SoundEffects.playClick();
       this.callbacks.onOpenFinance?.();
     });
 
     // PvZ 1 登入與玩家切換按鈕
-    document.getElementById('btn-hud-profile-avatar')?.addEventListener('click', () => {
+    document.getElementById('btn-hud-profile-avatar')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       SoundEffects.playClick();
       this.callbacks.onOpenLogin?.();
     });
 
-    document.getElementById('btn-hud-switch-user')?.addEventListener('click', () => {
+    document.getElementById('btn-hud-switch-user')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       SoundEffects.playClick();
       this.callbacks.onOpenLogin?.();
     });
 
-    document.getElementById('btn-login-user')?.addEventListener('click', () => {
+    document.getElementById('btn-login-user')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       SoundEffects.playClick();
       this.callbacks.onOpenLogin?.();
     });
 
-    document.getElementById('btn-toggle-mes')?.addEventListener('click', () => {
+    document.getElementById('btn-toggle-mes')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       SoundEffects.playClick();
       const next = !state.unlockedFeatures.mesAutoDispatch;
       state.unlockedFeatures.mesAutoDispatch = next;
@@ -268,23 +292,27 @@ export class TopHUD {
       this.render(state);
     });
 
-    document.getElementById('btn-hud-yield')?.addEventListener('click', () => {
+    document.getElementById('btn-hud-yield')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       SoundEffects.playClick();
       this.callbacks.onOpenWaferMap?.();
     });
 
-    document.getElementById('btn-tutorial')?.addEventListener('click', () => {
+    document.getElementById('btn-tutorial')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       SoundEffects.playClick();
       this.callbacks.onOpenTutorial?.();
     });
 
-    document.getElementById('btn-sound')?.addEventListener('click', () => {
+    document.getElementById('btn-sound')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       SoundEffects.toggleMute();
       SoundEffects.playClick();
       this.render(state);
     });
 
-    document.getElementById('btn-save')?.addEventListener('click', () => {
+    document.getElementById('btn-save')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       SoundEffects.playClick();
       this.callbacks.onOpenSaveModal();
     });

@@ -46,6 +46,7 @@ export interface UnlockedFeatures {
 export interface FacilityState {
   cleanroomPhase: CleanroomPhase;
   bayGridSize: { width: number; height: number };
+  yellowRoomTiles?: { x: number; y: number }[];
 }
 
 export interface MachineData {
@@ -107,6 +108,9 @@ export interface WaferLotData {
   qTimeDeadline: number | null;
   yieldMultiplier: number;
   status: LotStatus;
+  stationProgressSeconds?: number;
+  stationRequiredSeconds?: number;
+  hasYellowRoomViolation?: boolean;
 }
 
 export interface DailyQuest {

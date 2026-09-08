@@ -62,8 +62,13 @@ export class SaveGameService {
         mixAndMatchLitho: false
       },
       facility: {
-        cleanroomPhase: 1, // Phase 1 (8x8)
-        bayGridSize: { width: 8, height: 8 }
+        cleanroomPhase: 1, // Phase 1 (10x10)
+        bayGridSize: { width: 10, height: 10 },
+        yellowRoomTiles: [
+          { x: 3, y: 1 }, { x: 4, y: 1 }, { x: 5, y: 1 }, { x: 6, y: 1 }, { x: 7, y: 1 },
+          { x: 3, y: 2 }, { x: 4, y: 2 }, { x: 5, y: 2 }, { x: 6, y: 2 }, { x: 7, y: 2 },
+          { x: 3, y: 3 }, { x: 4, y: 3 }, { x: 5, y: 3 }, { x: 6, y: 3 }, { x: 7, y: 3 }
+        ]
       },
       machines: [
         {
@@ -72,7 +77,7 @@ export class SaveGameService {
           name: '熱氧化爐 (Thermal Oxidation)',
           category: 'FILM',
           tier: 1,
-          gridX: 2,
+          gridX: 1,
           gridY: 2,
           wear: 0,
           status: 'IDLE',
@@ -84,7 +89,7 @@ export class SaveGameService {
           name: '手動旋塗熱板台 (Manual Track)',
           category: 'TRACK',
           tier: 1,
-          gridX: 3,
+          gridX: 4,
           gridY: 2,
           wear: 0,
           status: 'IDLE',
@@ -96,7 +101,7 @@ export class SaveGameService {
           name: '接觸式微影機 (Contact Aligner)',
           category: 'LITHO',
           tier: 1,
-          gridX: 4,
+          gridX: 6,
           gridY: 2,
           wear: 0,
           status: 'IDLE',
@@ -109,8 +114,8 @@ export class SaveGameService {
           name: '電漿乾式蝕刻機 (Dry Plasma Etcher)',
           category: 'ETCH',
           tier: 1,
-          gridX: 3,
-          gridY: 4,
+          gridX: 6,
+          gridY: 6,
           wear: 0,
           status: 'IDLE',
           assignedEngineerId: null
@@ -122,7 +127,7 @@ export class SaveGameService {
           category: 'DIFF',
           tier: 1,
           gridX: 2,
-          gridY: 4,
+          gridY: 6,
           wear: 0,
           status: 'IDLE',
           assignedEngineerId: null
@@ -393,6 +398,19 @@ export class SaveGameService {
           if (parsed.staff) {
             parsed.staff = this.normalizeStaffData(parsed.staff);
           }
+          if (!parsed.facility) {
+            parsed.facility = { cleanroomPhase: 1, bayGridSize: { width: 10, height: 10 } };
+          }
+          if (!parsed.facility.yellowRoomTiles || parsed.facility.yellowRoomTiles.length === 0) {
+            parsed.facility.yellowRoomTiles = [
+              { x: 3, y: 1 }, { x: 4, y: 1 }, { x: 5, y: 1 }, { x: 6, y: 1 }, { x: 7, y: 1 },
+              { x: 3, y: 2 }, { x: 4, y: 2 }, { x: 5, y: 2 }, { x: 6, y: 2 }, { x: 7, y: 2 },
+              { x: 3, y: 3 }, { x: 4, y: 3 }, { x: 5, y: 3 }, { x: 6, y: 3 }, { x: 7, y: 3 }
+            ];
+          }
+          if (!parsed.facility.bayGridSize || parsed.facility.bayGridSize.width < 10) {
+            parsed.facility.bayGridSize = { width: 10, height: 10 };
+          }
           parsed.userId = activeUser.id;
           parsed.financialState = FinanceEngine.ensureFinancialState(parsed);
           return parsed as SaveGameV2;
@@ -493,8 +511,13 @@ export class SaveGameService {
         mixAndMatchLitho: false // V2 新增旗標
       },
       facility: {
-        cleanroomPhase: v1.facility.cleanroomPhase ?? 1,
-        bayGridSize: v1.facility.bayGridSize ?? { width: 8, height: 8 }
+        cleanroomPhase: v1.facility?.cleanroomPhase ?? 1,
+        bayGridSize: { width: 10, height: 10 },
+        yellowRoomTiles: [
+          { x: 3, y: 1 }, { x: 4, y: 1 }, { x: 5, y: 1 }, { x: 6, y: 1 }, { x: 7, y: 1 },
+          { x: 3, y: 2 }, { x: 4, y: 2 }, { x: 5, y: 2 }, { x: 6, y: 2 }, { x: 7, y: 2 },
+          { x: 3, y: 3 }, { x: 4, y: 3 }, { x: 5, y: 3 }, { x: 6, y: 3 }, { x: 7, y: 3 }
+        ]
       },
       machines: upgradedMachines,
       staff: this.normalizeStaffData(v1.staff ?? []),

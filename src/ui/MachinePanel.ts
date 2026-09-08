@@ -101,6 +101,8 @@ export class MachinePanel {
     });
 
     const isProcessingNow = activeLotsAtStation.length > 0;
+    const inYellow = ProductionEngine.isMachineInYellowRoom(machine, state.facility.yellowRoomTiles);
+    const needsYellow = machine.category === 'LITHO' || machine.category === 'TRACK';
 
     container.innerHTML = `
       <div id="modal-backdrop-machine" class="modal-backdrop">
@@ -139,6 +141,35 @@ export class MachinePanel {
 
           <!-- Body -->
           <div class="modal-body p-6 overflow-y-auto flex-1 space-y-4 text-xs">
+
+            <!-- Yellow Room Safety Warning / Status Banner -->
+            ${needsYellow ? (
+              !inYellow ? `
+                <div class="p-3.5 rounded-xl bg-red-950/70 border border-red-500/80 text-red-200 flex items-start gap-3 animate-pulse shadow-lg shadow-red-950/50">
+                  <span class="text-2xl">🚨</span>
+                  <div class="space-y-1">
+                    <div class="font-bold text-red-300 text-sm flex items-center gap-2">
+                      <span>致命白光污染！設備未置於黃光專區</span>
+                      <span class="px-2 py-0.5 rounded bg-red-600 text-white font-mono text-[10px] font-extrabold">良率直接歸零 (0%)</span>
+                    </div>
+                    <div class="text-[11px] text-red-200/90 leading-relaxed">
+                      光阻化學分子對環境可見光 (波長小於 500nm 之藍綠白光) 極度敏化。微影掃描機 (LITHO) 與塗膠顯影機 (TRACK) 必須劃設在黃光室 (Yellow Room) 琥珀色地磚內！請點擊頂部導覽列「🏗️ 廠房規劃」劃設黃光區或移動機台。
+                    </div>
+                  </div>
+                </div>
+              ` : `
+                <div class="p-3 rounded-xl bg-amber-950/30 border border-amber-500/50 text-amber-200 flex items-center justify-between font-mono text-xs">
+                  <div class="flex items-center gap-2">
+                    <span class="text-lg">🟡</span>
+                    <span class="font-bold text-amber-300">黃光專區安全防護中：</span>
+                    <span class="text-slate-300">機台受 500nm 以上濾光保護，光阻未受白光污染。</span>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
+                    良率保護正常
+                  </span>
+                </div>
+              `
+            ) : ''}
 
             <!-- 1. Equipment Description & Science Principles (半導體科普與機台說明) -->
             <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">

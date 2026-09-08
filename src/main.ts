@@ -71,7 +71,8 @@ class FoundryGame {
     this.cleanroomScene = new CleanroomScene();
     this.phaserGame.scene.add(CleanroomScene.KEY, this.cleanroomScene, true, {
       saveGame: this.state,
-      onMachineClick: (machine: MachineData) => this.handleMachineClick(machine)
+      onMachineClick: (machine: MachineData) => this.handleMachineClick(machine),
+      onStateUpdate: () => this.onStateChanged()
     });
 
     // 5. 初始化 DOM UI 模組
@@ -88,6 +89,9 @@ class FoundryGame {
         this.cleanroomScene.updateState(this.state);
         this.uiManager.updateState(this.state);
         this.onStateChanged();
+      },
+      (active, tool) => {
+        this.cleanroomScene.setPlannerMode(active, tool);
       }
     );
 
@@ -158,41 +162,68 @@ class FoundryGame {
         }
       }
 
-      // 2. 推進在製批次 (Wafer Lots)
+      // 2. 推進在製批次 (Wafer Lots) - 依據各機台現實物理/化學加工時間精準放慢進度
       const completedOrders: OrderData[] = [];
       for (const lot of this.state.activeLots) {
         if (lot.status === 'PROCESSING') {
-          const order = this.state.activeOrders.find((o) => o.id === lot.orderId);
-          const nodeNm = order ? order.nodeNm : 10000;
+          // 初始化站點加工計時
+          if (lot.stationProgressSeconds === undefined) {
+            lot.stationProgressSeconds = 0;
+          }
+          if (!lot.stationRequiredSeconds) {
+            lot.stationRequiredSeconds = ProductionEngine.getStationRequiredSeconds(
+              lot.currentStation,
+              lot.litSubStep
+            );
+          }
 
-          const adv = ProductionEngine.advanceLotStation(
-            lot,
-            this.state.unlockedFeatures.cmp,
-            nodeNm,
-            this.state.player.unlockedCleanroomClass,
-            this.state.gameTime
-          );
+          lot.stationProgressSeconds += 1;
 
-          if (adv.isLotCompleted) {
-            lot.status = 'COMPLETED';
-            if (order) {
-              const lotsForOrder = this.state.activeLots.filter((l) => l.orderId === order.id);
-              const diesInLot = Math.round((order.totalDies / Math.max(1, lotsForOrder.length)) * lot.yieldMultiplier);
-              order.goodDiesDelivered = Math.min(order.totalDies, order.goodDiesDelivered + diesInLot);
+          // 僅當累積時間達到該站點物理/化學加工所需秒數時，才推進至下一站點
+          if (lot.stationProgressSeconds >= lot.stationRequiredSeconds) {
+            lot.stationProgressSeconds = 0;
 
-              // 記錄良率歷史 (滑動 5 筆)
-              this.state.rollingYieldHistory.push(Number(lot.yieldMultiplier.toFixed(3)));
-              if (this.state.rollingYieldHistory.length > 5) {
-                this.state.rollingYieldHistory.shift();
-              }
+            const order = this.state.activeOrders.find((o) => o.id === lot.orderId);
+            const nodeNm = order ? order.nodeNm : 10000;
 
-              // 推進任務進度
-              QuestEngine.onWaferDelivered(this.state.questState, lot.waferCount);
+            const adv = ProductionEngine.advanceLotStation(
+              lot,
+              this.state.unlockedFeatures.cmp,
+              nodeNm,
+              this.state.player.unlockedCleanroomClass,
+              this.state.gameTime,
+              this.state.machines,
+              this.state.facility.yellowRoomTiles
+            );
 
-              // 若該訂單所有批次皆已完工
-              const allLotsDone = lotsForOrder.every((l) => l.status === 'COMPLETED');
-              if (allLotsDone && !completedOrders.includes(order)) {
-                completedOrders.push(order);
+            // 更新下一站點所需時間
+            lot.stationRequiredSeconds = ProductionEngine.getStationRequiredSeconds(
+              lot.currentStation,
+              lot.litSubStep
+            );
+
+            if (adv.isLotCompleted) {
+              lot.status = 'COMPLETED';
+              if (order) {
+                const lotsForOrder = this.state.activeLots.filter((l) => l.orderId === order.id);
+                // 若遭受黃光區違規或白光污染，良率已被強制歸零 (0.0)
+                const diesInLot = Math.round((order.totalDies / Math.max(1, lotsForOrder.length)) * lot.yieldMultiplier);
+                order.goodDiesDelivered = Math.min(order.totalDies, order.goodDiesDelivered + diesInLot);
+
+                // 記錄良率歷史 (滑動 5 筆)
+                this.state.rollingYieldHistory.push(Number(lot.yieldMultiplier.toFixed(3)));
+                if (this.state.rollingYieldHistory.length > 5) {
+                  this.state.rollingYieldHistory.shift();
+                }
+
+                // 推進任務進度 (若有產出良品晶圓)
+                QuestEngine.onWaferDelivered(this.state.questState, diesInLot > 0 ? lot.waferCount : 0);
+
+                // 若該訂單所有批次皆已完工
+                const allLotsDone = lotsForOrder.every((l) => l.status === 'COMPLETED');
+                if (allLotsDone && !completedOrders.includes(order)) {
+                  completedOrders.push(order);
+                }
               }
             }
           }

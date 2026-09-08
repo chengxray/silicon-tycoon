@@ -7,6 +7,7 @@
 
 import { SaveGameV2, OrderData, WaferLotData } from '../types';
 import { EconomyEngine } from '../engine/EconomyEngine';
+import { ProductionEngine } from '../engine/ProductionEngine';
 import { SoundEffects } from '../audio/SoundEffects';
 import { RayleighEngine } from '../engine/RayleighEngine';
 import { AchievementEngine } from '../engine/AchievementEngine';
@@ -448,7 +449,9 @@ export class ContractModal {
             totalLayers: order.layerCount,
             qTimeDeadline: null,
             yieldMultiplier: 1.0,
-            status: 'PROCESSING'
+            status: 'PROCESSING',
+            stationProgressSeconds: 0,
+            stationRequiredSeconds: ProductionEngine.getStationRequiredSeconds('FILM')
           };
           state.activeLots.push(lot);
         }

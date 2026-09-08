@@ -249,4 +249,13 @@ export class SoundEffects {
     noise.start(now);
     noise.stop(now + 0.4);
   }
+
+  public static playAlarm(): void {
+    this.playWarning();
+  }
+
+  public static playDing(): void {
+    this.playCoin();
+  }
 }
+

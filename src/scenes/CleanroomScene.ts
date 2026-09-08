@@ -9,6 +9,7 @@ import type * as PhaserTypes from 'phaser';
 declare const Phaser: typeof PhaserTypes;
 import { SaveGameV2, MachineData, StaffData } from '../types';
 import { MaintenanceEngine } from '../engine/MaintenanceEngine';
+import { ProductionEngine } from '../engine/ProductionEngine';
 import { ASSET_REGISTRY } from '../services/AssetRegistry';
 import { SoundEffects } from '../audio/SoundEffects';
 
@@ -16,8 +17,17 @@ export class CleanroomScene extends Phaser.Scene {
   public static readonly KEY = 'CleanroomScene';
 
   private saveGame!: SaveGameV2;
-  private tileWidth = 140;
-  private tileHeight = 70;
+  private tileWidth = 200;
+  private tileHeight = 100;
+
+  // 規劃模式狀態
+  public isPlannerMode = false;
+  public plannerTool: 'NONE' | 'PAINT_YELLOW' | 'PAINT_WHITE' | 'MOVE_MACHINE' = 'NONE';
+  public movingMachineId: string | null = null;
+  private pointerDownMachineId: string | null = null;
+  private plannerIndicatorGraphics!: Phaser.GameObjects.Graphics;
+  private selectionRingGraphics!: Phaser.GameObjects.Graphics;
+  private onStateUpdateCallback?: () => void;
 
   // 容器與物件快取
   private floorGraphics!: Phaser.GameObjects.Graphics;
@@ -30,6 +40,7 @@ export class CleanroomScene extends Phaser.Scene {
       label: Phaser.GameObjects.Text;
       tpmText?: Phaser.GameObjects.Text;
       processingText?: Phaser.GameObjects.Text;
+      yellowAlertText?: Phaser.GameObjects.Text;
       sprite?: Phaser.GameObjects.Image;
       fallback?: Phaser.GameObjects.Graphics;
     }
@@ -67,9 +78,14 @@ export class CleanroomScene extends Phaser.Scene {
     super({ key: CleanroomScene.KEY });
   }
 
-  public init(data: { saveGame: SaveGameV2; onMachineClick?: (machine: MachineData) => void }): void {
+  public init(data: {
+    saveGame: SaveGameV2;
+    onMachineClick?: (machine: MachineData) => void;
+    onStateUpdate?: () => void;
+  }): void {
     this.saveGame = data.saveGame;
     this.onMachineClickCallback = data.onMachineClick;
+    this.onStateUpdateCallback = data.onStateUpdate;
   }
 
   public preload(): void {
@@ -119,6 +135,10 @@ export class CleanroomScene extends Phaser.Scene {
   public create(): void {
     // 建立地圖與圖層容器
     this.floorGraphics = this.add.graphics();
+    this.selectionRingGraphics = this.add.graphics();
+    this.selectionRingGraphics.setDepth(45);
+    this.plannerIndicatorGraphics = this.add.graphics();
+    this.plannerIndicatorGraphics.setDepth(48);
     this.railGraphics = this.add.graphics();
 
     // 繪製地坪格柵與黃光區
@@ -139,9 +159,9 @@ export class CleanroomScene extends Phaser.Scene {
     // 生成天花板 OHT 晶圓盒天車 (Layer 3)
     this.spawnOHTShuttles();
 
-    // 設定攝影機初始位置與縮放控制
-    this.cameras.main.centerOn(0, 200);
-    this.cameras.main.setZoom(0.95);
+    // 設定攝影機初始位置與縮放控制 (適應放大後的 200x100 等角地坪)
+    this.cameras.main.centerOn(0, 300);
+    this.cameras.main.setZoom(0.85);
 
     // 註冊滑鼠平移與滾輪縮放
     this.setupCameraControls();
@@ -160,18 +180,31 @@ export class CleanroomScene extends Phaser.Scene {
   }
 
   /**
-   * 繪製潔淨室等角地坪格柵與黃光區光暈 (Floor Grid & Yellow Room Aura)
+   * 2.5D 螢幕座標反變換為格點座標 (Screen to Grid)
    */
-  private renderFloor(): void {
+  public toGrid(worldX: number, worldY: number): { gridX: number; gridY: number } {
+    const gx = Math.floor(worldX / this.tileWidth + worldY / this.tileHeight + 0.5);
+    const gy = Math.floor(worldY / this.tileHeight - worldX / this.tileWidth + 0.5);
+    return { gridX: gx, gridY: gy };
+  }
+
+  /**
+   * 繪製潔淨室等角地坪格柵與黃光區光暈 (Floor Grid & Yellow Room Aura)
+   * 放大為 200x100 菱形地磚，徹底杜絕前後機台相互遮擋！
+   */
+  public renderFloor(): void {
     this.floorGraphics.clear();
     const size = this.saveGame.facility.bayGridSize;
+    const yellowTiles = this.saveGame.facility.yellowRoomTiles || [];
 
     for (let gx = 0; gx < size.width; gx++) {
       for (let gy = 0; gy < size.height; gy++) {
         const { x, y } = this.toScreen(gx, gy);
 
-        // 判斷是否為黃光微影專區 (靠近 LITHO 與 TRACK 機台之區域)
-        const isYellowArea = gy <= 3 && gx >= 2 && gx <= 5;
+        // 判斷是否為黃光微影專區
+        const isYellowArea = yellowTiles.length > 0
+          ? yellowTiles.some(t => t.x === gx && t.y === gy)
+          : (gy <= 3 && gx >= 3 && gx <= 7);
 
         // 地磚菱形四頂點
         const pTop = { x, y: y - this.tileHeight / 2 };
@@ -181,12 +214,12 @@ export class CleanroomScene extends Phaser.Scene {
 
         if (isYellowArea) {
           // 黃光區暖黃濾光地磚
-          this.floorGraphics.fillStyle(0x271905, 0.95);
-          this.floorGraphics.lineStyle(1.5, 0xf59e0b, 0.45);
+          this.floorGraphics.fillStyle(0x301e06, 0.96);
+          this.floorGraphics.lineStyle(1.8, 0xf59e0b, 0.55);
         } else {
           // 標準潔淨室深藍防靜電導電地磚
           this.floorGraphics.fillStyle((gx + gy) % 2 === 0 ? 0x091122 : 0x0c162d, 0.95);
-          this.floorGraphics.lineStyle(1, 0x1e293b, 0.5);
+          this.floorGraphics.lineStyle(1, 0x1e293b, 0.55);
         }
 
         this.floorGraphics.beginPath();
@@ -199,18 +232,6 @@ export class CleanroomScene extends Phaser.Scene {
         this.floorGraphics.strokePath();
       }
     }
-
-    // 黃光區標籤光暈
-    const yellowCenter = this.toScreen(3.5, 1.5);
-    const yellowLabel = this.add.text(yellowCenter.x, yellowCenter.y - 40, '🟡 黃光微影作業專區 (LITHO BAY)', {
-      fontFamily: 'Noto Sans TC, sans-serif',
-      fontSize: '12px',
-      color: '#fbbf24',
-      stroke: '#000000',
-      strokeThickness: 3
-    });
-    yellowLabel.setOrigin(0.5);
-    yellowLabel.setDepth(10);
   }
 
   /**
@@ -255,15 +276,15 @@ export class CleanroomScene extends Phaser.Scene {
         container.setDepth(depth);
 
         // 1. 機台基座投影倒影陰影
-        const shadow = this.add.ellipse(0, 10, this.tileWidth * 0.7, this.tileHeight * 0.5, 0x000000, 0.4);
+        const shadow = this.add.ellipse(0, 10, 88, 38, 0x000000, 0.4);
         container.add(shadow);
 
         // 2. 機台 Sprite 或程序化高科技立方體貼圖
         let sprite: Phaser.GameObjects.Image | undefined;
         let fallback: Phaser.GameObjects.Graphics | undefined;
+        const targetSize = 118;
         if (this.textures.exists(machine.modelId)) {
-          sprite = this.add.image(0, -35, machine.modelId);
-          const targetSize = this.tileWidth * 0.95;
+          sprite = this.add.image(0, -25, machine.modelId);
           sprite.setDisplaySize(targetSize, targetSize);
           container.add(sprite);
         } else {
@@ -274,16 +295,16 @@ export class CleanroomScene extends Phaser.Scene {
 
         // 3. 狀態指示 LED 呼吸燈 (綠: 正常, 藍: 運作中, 黃閃: 維修, 紅閃: 故障炸機)
         const ledColor = this.getLEDColor(machine.status);
-        const ledArc = this.add.circle(0, -90, 6, ledColor);
+        const ledArc = this.add.circle(0, -82, 6, ledColor);
         container.add(ledArc);
 
         // 4. 機台名稱與磨損率文字
-        const label = this.add.text(0, 15, `${machine.name} (${Math.round(machine.wear)}%)`, {
+        const label = this.add.text(0, 18, `${machine.name} (${Math.round(machine.wear)}%)`, {
           fontFamily: 'Noto Sans TC, sans-serif',
           fontSize: '11px',
           fontStyle: 'bold',
           color: '#f8fafc',
-          backgroundColor: 'rgba(15, 23, 42, 0.85)',
+          backgroundColor: 'rgba(15, 23, 42, 0.88)',
           padding: { x: 6, y: 3 }
         });
         label.setOrigin(0.5);
@@ -295,12 +316,12 @@ export class CleanroomScene extends Phaser.Scene {
 
         let tpmText: Phaser.GameObjects.Text | undefined;
         if (tpmCheck.isTPMActive) {
-          tpmText = this.add.text(0, -110, '🛡️ TPM 零故障', {
+          tpmText = this.add.text(0, -104, '🛡️ TPM 零故障', {
             fontFamily: 'Noto Sans TC, sans-serif',
             fontSize: '10px',
             fontStyle: 'bold',
             color: '#10b981',
-            backgroundColor: 'rgba(6, 78, 59, 0.9)',
+            backgroundColor: 'rgba(6, 78, 59, 0.92)',
             padding: { x: 5, y: 2 }
           });
           tpmText.setOrigin(0.5);
@@ -310,7 +331,7 @@ export class CleanroomScene extends Phaser.Scene {
         // 6. ⚡ 加工中 (PROCESSING) 即時徽章
         let processingText: Phaser.GameObjects.Text | undefined;
         if (machine.status === 'PROCESSING') {
-          processingText = this.add.text(0, -110, '⚡ 加工中', {
+          processingText = this.add.text(0, -104, '⚡ 加工中', {
             fontFamily: 'Noto Sans TC, sans-serif',
             fontSize: '10px',
             fontStyle: 'bold',
@@ -322,9 +343,35 @@ export class CleanroomScene extends Phaser.Scene {
           container.add(processingText);
         }
 
-        // 7. 互動點擊事件
-        container.setSize(this.tileWidth * 0.85, this.tileHeight * 1.8);
-        container.setInteractive({ useHandCursor: true });
+        // 7. 🚨 黃光微影防護檢測 (若微影機或塗膠機未在黃光區，亮起醒目紅牌警報)
+        const inYellow = ProductionEngine.isMachineInYellowRoom(machine, this.saveGame.facility.yellowRoomTiles);
+        const needsYellow = machine.category === 'LITHO' || machine.category === 'TRACK';
+        let yellowAlertText: Phaser.GameObjects.Text | undefined;
+        if (needsYellow && !inYellow) {
+          yellowAlertText = this.add.text(0, -125, '🚨 缺乏黃光防護 (良率 0%)', {
+            fontFamily: 'Noto Sans TC, sans-serif',
+            fontSize: '10px',
+            fontStyle: 'bold',
+            color: '#ffffff',
+            backgroundColor: 'rgba(220, 38, 38, 0.95)',
+            padding: { x: 6, y: 3 }
+          });
+          yellowAlertText.setOrigin(0.5);
+          container.add(yellowAlertText);
+        }
+
+        // 8. 精準置中互動點擊幾何盒 (徹底根除點擊穿透到下層機台問題)
+        const hitW = 96;
+        const hitH = 96;
+        container.setInteractive(
+          new Phaser.Geom.Rectangle(-hitW / 2, -hitH + 15, hitW, hitH),
+          Phaser.Geom.Rectangle.Contains
+        );
+
+        container.on('pointerdown', (_pointer: Phaser.Input.Pointer) => {
+          this.pointerDownMachineId = machine.id;
+          if (_pointer.event) _pointer.event.stopPropagation();
+        });
 
         container.on('pointerover', () => {
           const currentEntry = this.machineMap.get(machine.id);
@@ -335,26 +382,34 @@ export class CleanroomScene extends Phaser.Scene {
           if (currentEntry?.sprite) currentEntry.sprite.clearTint();
         });
         container.on('pointerup', (_pointer: Phaser.Input.Pointer) => {
-          // 只有在非拖曳 (位移 <= 閾值) 狀況下才視為點擊機台，防止拖曳鏡頭時誤開面板
-          if (this.totalDragDistance <= this.dragThreshold) {
+          if (this.pointerDownMachineId === machine.id && this.totalDragDistance <= this.dragThreshold) {
+            if (_pointer.event) _pointer.event.stopPropagation();
             SoundEffects.playClick();
-            if (this.onMachineClickCallback) {
-              this.onMachineClickCallback(machine);
+            if (this.isPlannerMode && this.plannerTool === 'MOVE_MACHINE') {
+              this.selectMachineToMove(machine);
+            } else if (!this.isPlannerMode) {
+              if (this.onMachineClickCallback) {
+                this.onMachineClickCallback(machine);
+              }
             }
           }
+          this.pointerDownMachineId = null;
         });
 
-        this.machineMap.set(machine.id, { container, ledArc, label, tpmText, processingText, sprite, fallback });
+        this.machineMap.set(machine.id, { container, ledArc, label, tpmText, processingText, yellowAlertText, sprite, fallback });
       } else {
-        // 更新現有機台狀態與 LED
+        // 更新現有機台座標 (支援廠房搬移規劃即時同步)
+        entry.container.setPosition(x, y);
+        entry.container.setDepth(depth);
+
         // 如果之前是 fallback，但現在貼圖已就緒，即刻升級為 2.5D 精美 Sprite
         if (!entry.sprite && this.textures.exists(machine.modelId)) {
           if (entry.fallback) {
             entry.fallback.destroy();
             entry.fallback = undefined;
           }
-          const sprite = this.add.image(0, -35, machine.modelId);
-          const targetSize = this.tileWidth * 0.95;
+          const sprite = this.add.image(0, -25, machine.modelId);
+          const targetSize = 118;
           sprite.setDisplaySize(targetSize, targetSize);
           entry.container.addAt(sprite, 1);
           entry.sprite = sprite;
@@ -366,7 +421,7 @@ export class CleanroomScene extends Phaser.Scene {
         // 更新加工中徽章
         if (machine.status === 'PROCESSING') {
           if (!entry.processingText) {
-            const pText = this.add.text(0, -110, '⚡ 加工中', {
+            const pText = this.add.text(0, -104, '⚡ 加工中', {
               fontFamily: 'Noto Sans TC, sans-serif',
               fontSize: '10px',
               fontStyle: 'bold',
@@ -383,16 +438,38 @@ export class CleanroomScene extends Phaser.Scene {
           entry.processingText = undefined;
         }
 
+        // 更新黃光防護告警
+        const inYellow = ProductionEngine.isMachineInYellowRoom(machine, this.saveGame.facility.yellowRoomTiles);
+        const needsYellow = machine.category === 'LITHO' || machine.category === 'TRACK';
+        if (needsYellow && !inYellow) {
+          if (!entry.yellowAlertText) {
+            const yAlert = this.add.text(0, -125, '🚨 缺乏黃光防護 (良率 0%)', {
+              fontFamily: 'Noto Sans TC, sans-serif',
+              fontSize: '10px',
+              fontStyle: 'bold',
+              color: '#ffffff',
+              backgroundColor: 'rgba(220, 38, 38, 0.95)',
+              padding: { x: 6, y: 3 }
+            });
+            yAlert.setOrigin(0.5);
+            entry.container.add(yAlert);
+            entry.yellowAlertText = yAlert;
+          }
+        } else if (entry.yellowAlertText) {
+          entry.yellowAlertText.destroy();
+          entry.yellowAlertText = undefined;
+        }
+
         const assignedEng = machine.assignedEngineerId ? staffMap.get(machine.assignedEngineerId) : null;
         const tpmCheck = MaintenanceEngine.checkTPMConditions(machine, assignedEng);
 
         if (tpmCheck.isTPMActive && !entry.tpmText) {
-          const tpmText = this.add.text(0, -125, '🛡️ TPM 零故障', {
+          const tpmText = this.add.text(0, -104, '🛡️ TPM 零故障', {
             fontFamily: 'Noto Sans TC, sans-serif',
             fontSize: '10px',
             fontStyle: 'bold',
             color: '#10b981',
-            backgroundColor: 'rgba(6, 78, 59, 0.9)',
+            backgroundColor: 'rgba(6, 78, 59, 0.92)',
             padding: { x: 5, y: 2 }
           });
           tpmText.setOrigin(0.5);
@@ -638,6 +715,155 @@ export class CleanroomScene extends Phaser.Scene {
   }
 
   /**
+   * 切換廠房規劃模式 (黃光區劃設、潔淨室還原、機台搬移)
+   */
+  public setPlannerMode(active: boolean, tool: 'PAINT_YELLOW' | 'PAINT_WHITE' | 'MOVE_MACHINE' | 'NONE' = 'NONE'): void {
+    this.isPlannerMode = active;
+    this.plannerTool = tool;
+    this.movingMachineId = null;
+    this.plannerIndicatorGraphics.clear();
+    this.selectionRingGraphics.clear();
+  }
+
+  /**
+   * 選取欲搬移之機台
+   */
+  public selectMachineToMove(machine: MachineData): void {
+    if (this.movingMachineId === machine.id) {
+      // 再次點選則取消選取
+      this.movingMachineId = null;
+      this.selectionRingGraphics.clear();
+      this.plannerIndicatorGraphics.clear();
+      SoundEffects.playClick();
+      return;
+    }
+
+    this.movingMachineId = machine.id;
+    SoundEffects.playClick();
+    this.drawSelectionRing(machine.gridX, machine.gridY);
+  }
+
+  /**
+   * 繪製機台選取高亮環
+   */
+  private drawSelectionRing(gx: number, gy: number): void {
+    this.selectionRingGraphics.clear();
+    const { x, y } = this.toScreen(gx, gy);
+
+    // 繪製青藍高光菱形選取框
+    this.selectionRingGraphics.lineStyle(3.5, 0x06b6d4, 0.95);
+    const pTop = { x, y: y - this.tileHeight / 2 - 2 };
+    const pRight = { x: x + this.tileWidth / 2 + 4, y };
+    const pBottom = { x, y: y + this.tileHeight / 2 + 2 };
+    const pLeft = { x: x - this.tileWidth / 2 - 4, y };
+
+    this.selectionRingGraphics.beginPath();
+    this.selectionRingGraphics.moveTo(pTop.x, pTop.y);
+    this.selectionRingGraphics.lineTo(pRight.x, pRight.y);
+    this.selectionRingGraphics.lineTo(pBottom.x, pBottom.y);
+    this.selectionRingGraphics.lineTo(pLeft.x, pLeft.y);
+    this.selectionRingGraphics.closePath();
+    this.selectionRingGraphics.strokePath();
+  }
+
+  /**
+   * 規劃模式游標格點高光指示器 (即時提示有效/無效格點)
+   */
+  private updatePlannerCursorIndicator(worldX: number, worldY: number): void {
+    if (!this.isPlannerMode || !this.plannerIndicatorGraphics) return;
+    this.plannerIndicatorGraphics.clear();
+
+    const { gridX, gridY } = this.toGrid(worldX, worldY);
+    const size = this.saveGame.facility.bayGridSize;
+    if (gridX < 0 || gridX >= size.width || gridY < 0 || gridY >= size.height) return;
+
+    const { x, y } = this.toScreen(gridX, gridY);
+    const pTop = { x, y: y - this.tileHeight / 2 };
+    const pRight = { x: x + this.tileWidth / 2, y };
+    const pBottom = { x, y: y + this.tileHeight / 2 };
+    const pLeft = { x: x - this.tileWidth / 2, y };
+
+    if (this.plannerTool === 'PAINT_YELLOW') {
+      this.plannerIndicatorGraphics.fillStyle(0xf59e0b, 0.45);
+      this.plannerIndicatorGraphics.lineStyle(2.5, 0xfbbf24, 0.95);
+    } else if (this.plannerTool === 'PAINT_WHITE') {
+      this.plannerIndicatorGraphics.fillStyle(0x0284c7, 0.45);
+      this.plannerIndicatorGraphics.lineStyle(2.5, 0x38bdf8, 0.95);
+    } else if (this.plannerTool === 'MOVE_MACHINE') {
+      const occupied = this.saveGame.machines.some(m => m.id !== this.movingMachineId && m.gridX === gridX && m.gridY === gridY);
+      if (occupied) {
+        this.plannerIndicatorGraphics.fillStyle(0xef4444, 0.45);
+        this.plannerIndicatorGraphics.lineStyle(2.5, 0xf87171, 0.95);
+      } else {
+        this.plannerIndicatorGraphics.fillStyle(0x10b981, 0.45);
+        this.plannerIndicatorGraphics.lineStyle(2.5, 0x34d399, 0.95);
+      }
+    }
+
+    this.plannerIndicatorGraphics.beginPath();
+    this.plannerIndicatorGraphics.moveTo(pTop.x, pTop.y);
+    this.plannerIndicatorGraphics.lineTo(pRight.x, pRight.y);
+    this.plannerIndicatorGraphics.lineTo(pBottom.x, pBottom.y);
+    this.plannerIndicatorGraphics.lineTo(pLeft.x, pLeft.y);
+    this.plannerIndicatorGraphics.closePath();
+    this.plannerIndicatorGraphics.fillPath();
+    this.plannerIndicatorGraphics.strokePath();
+  }
+
+  /**
+   * 處理規劃模式點擊地磚
+   */
+  private handlePlannerTileClick(gx: number, gy: number): void {
+    const size = this.saveGame.facility.bayGridSize;
+    if (gx < 0 || gx >= size.width || gy < 0 || gy >= size.height) return;
+
+    if (this.plannerTool === 'PAINT_YELLOW') {
+      if (!this.saveGame.facility.yellowRoomTiles) {
+        this.saveGame.facility.yellowRoomTiles = [];
+      }
+      const exists = this.saveGame.facility.yellowRoomTiles.some(t => t.x === gx && t.y === gy);
+      if (!exists) {
+        this.saveGame.facility.yellowRoomTiles.push({ x: gx, y: gy });
+        SoundEffects.playClick();
+        this.renderFloor();
+        this.renderMachines();
+        this.onStateUpdateCallback?.();
+      }
+    } else if (this.plannerTool === 'PAINT_WHITE') {
+      if (this.saveGame.facility.yellowRoomTiles) {
+        const idx = this.saveGame.facility.yellowRoomTiles.findIndex(t => t.x === gx && t.y === gy);
+        if (idx >= 0) {
+          this.saveGame.facility.yellowRoomTiles.splice(idx, 1);
+          SoundEffects.playClick();
+          this.renderFloor();
+          this.renderMachines();
+          this.onStateUpdateCallback?.();
+        }
+      }
+    } else if (this.plannerTool === 'MOVE_MACHINE' && this.movingMachineId) {
+      // 檢查該格是否已被其他機台佔用
+      const occupied = this.saveGame.machines.some(m => m.id !== this.movingMachineId && m.gridX === gx && m.gridY === gy);
+      if (occupied) {
+        SoundEffects.playAlarm();
+        return;
+      }
+
+      const machine = this.saveGame.machines.find(m => m.id === this.movingMachineId);
+      if (machine) {
+        machine.gridX = gx;
+        machine.gridY = gy;
+        SoundEffects.playDing();
+        this.movingMachineId = null;
+        this.selectionRingGraphics.clear();
+        this.plannerIndicatorGraphics.clear();
+        this.renderMachines();
+        this.renderOHTRails();
+        this.onStateUpdateCallback?.();
+      }
+    }
+  }
+
+  /**
    * 滑鼠拖曳平移與滾輪縮放 (含拖曳死區與游標防呆)
    */
   private setupCameraControls(): void {
@@ -651,6 +877,12 @@ export class CleanroomScene extends Phaser.Scene {
     });
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      // 規劃模式游標指示即時渲染
+      if (this.isPlannerMode) {
+        const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+        this.updatePlannerCursorIndicator(worldPoint.x, worldPoint.y);
+      }
+
       if (this.isDragging) {
         if (!pointer.isDown || !pointer.leftButtonDown()) {
           this.isDragging = false;
@@ -673,20 +905,31 @@ export class CleanroomScene extends Phaser.Scene {
       }
     });
 
-    this.input.on('pointerup', () => {
+    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+      const wasDragging = this.totalDragDistance > this.dragThreshold;
       this.isDragging = false;
+      this.pointerDownMachineId = null;
+
+      // 規劃模式點選地磚
+      if (!wasDragging && this.isPlannerMode) {
+        const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+        const { gridX, gridY } = this.toGrid(worldPoint.x, worldPoint.y);
+        this.handlePlannerTileClick(gridX, gridY);
+      }
     });
 
     // 全域防呆：游標在 DOM 元素放開或焦點移出視窗時，強制清空拖曳狀態，絕不讓畫面吸附跟隨滑鼠
     window.addEventListener('mouseup', () => {
       this.isDragging = false;
+      this.pointerDownMachineId = null;
     });
     window.addEventListener('blur', () => {
       this.isDragging = false;
+      this.pointerDownMachineId = null;
     });
 
     this.input.on('wheel', (_pointer: any, _gameObjects: any, _deltaX: number, deltaY: number) => {
-      const newZoom = Phaser.Math.Clamp(this.cameras.main.zoom - deltaY * 0.001, 0.5, 2.2);
+      const newZoom = Phaser.Math.Clamp(this.cameras.main.zoom - deltaY * 0.001, 0.45, 2.2);
       this.cameras.main.setZoom(newZoom);
     });
   }
@@ -700,6 +943,7 @@ export class CleanroomScene extends Phaser.Scene {
    */
   public updateState(state: SaveGameV2): void {
     this.saveGame = state;
+    this.renderFloor();
     this.renderMachines();
     if (this.saveGame.unlockedFeatures.agv && this.agvCarriers.length === 0) {
       this.spawnAGVCarriers();

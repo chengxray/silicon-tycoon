@@ -26,14 +26,25 @@ export class WaferMapModal {
     this.currentLot = lot || (state.activeLots.length > 0 ? state.activeLots[0] : null);
 
     // 計算基礎良率 (若無指定批次，取目前滑動良率或 92%)
-    const baseYield = this.currentLot
-      ? this.currentLot.yieldMultiplier
-      : (state.rollingYieldHistory.length > 0
-        ? state.rollingYieldHistory.reduce((a, b) => a + b, 0) / state.rollingYieldHistory.length
-        : 0.92);
+    const isViolation = !!this.currentLot?.hasYellowRoomViolation;
+    const baseYield = isViolation
+      ? 0.0
+      : (this.currentLot
+        ? this.currentLot.yieldMultiplier
+        : (state.rollingYieldHistory.length > 0
+          ? state.rollingYieldHistory.reduce((a, b) => a + b, 0) / state.rollingYieldHistory.length
+          : 0.92));
 
     // 生成蒙地卡羅 25 晶粒圖
-    this.dies = YieldEngine.generateWaferMap(baseYield);
+    if (isViolation || baseYield === 0) {
+      this.dies = YieldEngine.generateWaferMap(0);
+      for (const d of this.dies) {
+        d.passed = false;
+        d.defectType = 'CLUSTER';
+      }
+    } else {
+      this.dies = YieldEngine.generateWaferMap(baseYield);
+    }
     this.selectedDie = this.dies[12] || this.dies[0]; // 預設選中中心晶粒 (row 2, col 2)
 
     this.render(container, state, onUpdate);
@@ -142,6 +153,21 @@ export class WaferMapModal {
 
             <!-- Right: Die Telemetry & Statistics -->
             <div class="space-y-4">
+
+              <!-- Yellow Room Violation Alert Banner -->
+              ${this.currentLot?.hasYellowRoomViolation || Number(lotYieldPercent) === 0 ? `
+                <div class="p-3.5 rounded-xl bg-red-950/70 border border-red-500/80 text-red-200 flex items-start gap-3 animate-pulse shadow-lg shadow-red-950/50">
+                  <span class="text-2xl">🚨</span>
+                  <div>
+                    <div class="font-bold text-red-300 text-xs flex items-center gap-1.5">
+                      <span>致命白光曝光污染！全批報廢 (良率 0%)</span>
+                    </div>
+                    <div class="text-[10px] text-red-200/90 leading-relaxed mt-0.5">
+                      本批晶圓於無黃光防護之微影/塗膠設備加工，受無塵室環境可見光曝曬，感光光阻全面失效，所有晶粒均無法正確圖案化！請使用「🏗️ 廠房規劃」劃設黃光區或搬移機台。
+                    </div>
+                  </div>
+                </div>
+              ` : ''}
               
               <!-- Metrics Cards -->
               <div class="grid grid-cols-2 gap-2.5 font-mono">
@@ -195,11 +221,13 @@ export class WaferMapModal {
                     ${!this.selectedDie.passed ? `
                       <div class="pt-1.5 border-t border-slate-800 text-[10px] text-slate-300">
                         <span class="text-amber-300 font-bold">失效原因分析：</span>
-                        ${this.selectedDie.defectType === 'CLUSTER'
-                          ? '【區域群聚缺陷】微影光阻殘留或化學腐蝕液擴散，波及相鄰相連晶粒！'
-                          : (this.selectedDie.defectType === 'OPTICAL_DEFOCUS'
-                            ? '【邊緣聚焦離焦】晶圓邊緣物理翹曲與數值孔徑 NA 聚焦裕度不足導致線寬失真！'
-                            : '【微影落塵污染】無塵室空氣中微粒穿透光阻，導致金屬互連斷路！')}
+                        ${this.currentLot?.hasYellowRoomViolation
+                          ? '【致命白光曝曬污染】微影設備未設置於黃光專區，環境可見光破壞感光光阻化學鍵，全片晶粒完全報廢！'
+                          : (this.selectedDie.defectType === 'CLUSTER'
+                            ? '【區域群聚缺陷】微影光阻殘留或化學腐蝕液擴散，波及相鄰相連晶粒！'
+                            : (this.selectedDie.defectType === 'OPTICAL_DEFOCUS'
+                              ? '【邊緣聚焦離焦】晶圓邊緣物理翹曲與數值孔徑 NA 聚焦裕度不足導致線寬失真！'
+                              : '【微影落塵污染】無塵室空氣中微粒穿透光阻，導致金屬互連斷路！'))}
                       </div>
                     ` : `
                       <div class="text-[10px] text-emerald-300/80 pt-1">

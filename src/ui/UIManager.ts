@@ -27,16 +27,21 @@ export class UIManager {
   private state: SaveGameV2;
   private onStateUpdated: () => void;
   private onUserSwitched?: (newState: SaveGameV2) => void;
+  private onTogglePlanner?: (active: boolean, tool?: 'PAINT_YELLOW' | 'PAINT_WHITE' | 'MOVE_MACHINE' | 'NONE') => void;
+  public isPlannerActive = false;
+  public currentPlannerTool: 'PAINT_YELLOW' | 'PAINT_WHITE' | 'MOVE_MACHINE' | 'NONE' = 'MOVE_MACHINE';
 
   constructor(
     state: SaveGameV2,
     onSpeedChange: (speed: number) => void,
     onStateUpdated: () => void,
-    onUserSwitched?: (newState: SaveGameV2) => void
+    onUserSwitched?: (newState: SaveGameV2) => void,
+    onTogglePlanner?: (active: boolean, tool?: 'PAINT_YELLOW' | 'PAINT_WHITE' | 'MOVE_MACHINE' | 'NONE') => void
   ) {
     this.state = state;
     this.onStateUpdated = onStateUpdated;
     this.onUserSwitched = onUserSwitched;
+    this.onTogglePlanner = onTogglePlanner;
 
     // 初始化 Top HUD
     this.topHUD = new TopHUD('top-hud', {
@@ -51,7 +56,8 @@ export class UIManager {
       onOpenWaferMap: () => this.openWaferMap(),
       onOpenTutorial: () => this.openTutorial(),
       onOpenFinance: () => this.openFinancialReport(),
-      onOpenLogin: () => this.openUserLogin()
+      onOpenLogin: () => this.openUserLogin(),
+      onOpenPlanner: () => this.togglePlannerMode()
     });
 
     // 初始化 Dev Console 監聽器
@@ -191,6 +197,14 @@ export class UIManager {
                 <span>交付進度: <strong class="text-amber-300">${delivered} / ${total} 顆</strong> (${pct}%)</span>
                 <span class="text-slate-600">|</span>
                 <span>所在機台: <strong class="${currentMachine?.status === 'EXPLODED' ? 'text-red-400 font-bold animate-pulse' : 'text-cyan-300'}">📍 ${currentMachine ? currentMachine.name : '產線調度中'}</strong></span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-900 border border-slate-700 text-cyan-300">
+                  ⏱️ 站點進度: <strong>${activeLot ? (activeLot.stationProgressSeconds || 0) : 0}s</strong> / ${activeLot ? (activeLot.stationRequiredSeconds || 10) : 10}s
+                </span>
+                ${activeLot?.hasYellowRoomViolation ? `
+                  <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-red-950 text-red-300 border border-red-500/60 animate-pulse">
+                    🚨 致命白光污染！微影設備未在黃光區 (良率 0%)
+                  </span>
+                ` : ''}
                 ${qTimeHtml}
               </div>
             </div>
@@ -231,8 +245,10 @@ export class UIManager {
               statusText = '✓ 完工';
               statusColor = 'text-emerald-400';
             } else if (idx === activePipelineIdx) {
+              const currentSec = activeLot?.stationProgressSeconds || 0;
+              const reqSec = activeLot?.stationRequiredSeconds || 10;
               statusClass = 'step-active';
-              statusText = '⚡ 加工中';
+              statusText = `⚡ ${currentSec}/${reqSec}s`;
               statusColor = 'text-cyan-300 font-bold';
             }
 
@@ -260,9 +276,102 @@ export class UIManager {
       </div>
     `;
 
-    document.getElementById('hud-order-status-bar')?.addEventListener('click', () => {
+    document.getElementById('hud-order-status-bar')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       SoundEffects.playClick();
       this.openContracts();
+    });
+
+    document.getElementById('btn-bar-action')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      SoundEffects.playClick();
+      this.openContracts();
+    });
+  }
+
+  public togglePlannerMode(forceState?: boolean): void {
+    this.isPlannerActive = forceState !== undefined ? forceState : !this.isPlannerActive;
+    if (this.isPlannerActive && this.currentPlannerTool === 'NONE') {
+      this.currentPlannerTool = 'MOVE_MACHINE';
+    }
+    this.onTogglePlanner?.(this.isPlannerActive, this.currentPlannerTool);
+    this.renderPlannerToolbar();
+  }
+
+  public setPlannerTool(tool: 'PAINT_YELLOW' | 'PAINT_WHITE' | 'MOVE_MACHINE' | 'NONE'): void {
+    this.currentPlannerTool = tool;
+    this.onTogglePlanner?.(this.isPlannerActive, tool);
+    this.renderPlannerToolbar();
+  }
+
+  public renderPlannerToolbar(): void {
+    let el = document.getElementById('planner-toolbar');
+    if (!this.isPlannerActive) {
+      if (el) el.remove();
+      return;
+    }
+
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'planner-toolbar';
+      document.body.appendChild(el);
+    }
+
+    el.className = 'fixed top-18 left-1/2 -translate-x-1/2 z-50 glass-panel p-3 border-2 border-amber-500/70 shadow-2xl rounded-2xl flex flex-wrap items-center gap-3 animate-scaleUp pointer-events-auto bg-slate-950/95';
+    el.innerHTML = `
+      <div class="flex items-center gap-2 border-r border-slate-700/80 pr-3">
+        <span class="text-xl">🏗️</span>
+        <div>
+          <div class="text-xs font-black text-amber-300 flex items-center gap-1.5">
+            <span>廠房機台與黃光區規劃</span>
+            <span class="px-1.5 py-0.2 rounded text-[10px] bg-amber-950 text-amber-300 border border-amber-500/40">EDIT</span>
+          </div>
+          <div class="text-[10px] text-slate-400">微影機 (Scanner) 未在黃光區良率將為 0%！</div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1.5">
+        <button id="btn-planner-move" class="btn-sci-fi text-xs py-1.5 px-3 ${this.currentPlannerTool === 'MOVE_MACHINE' ? 'bg-emerald-600 text-white font-bold shadow-md shadow-emerald-500/40 border-emerald-400 ring-2 ring-emerald-400/50' : 'bg-slate-900 border-emerald-500/40 text-emerald-300 hover:bg-slate-800'}">
+          🚜 搬移機台
+        </button>
+        <button id="btn-planner-yellow" class="btn-sci-fi text-xs py-1.5 px-3 ${this.currentPlannerTool === 'PAINT_YELLOW' ? 'bg-amber-600 text-white font-bold shadow-md shadow-amber-500/40 border-amber-400 ring-2 ring-amber-400/50' : 'bg-slate-900 border-amber-500/40 text-amber-300 hover:bg-slate-800'}">
+          🟡 劃設黃光區
+        </button>
+        <button id="btn-planner-white" class="btn-sci-fi text-xs py-1.5 px-3 ${this.currentPlannerTool === 'PAINT_WHITE' ? 'bg-cyan-600 text-white font-bold shadow-md shadow-cyan-500/40 border-cyan-400 ring-2 ring-cyan-400/50' : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800'}">
+          🏢 還原潔淨室
+        </button>
+      </div>
+
+      <div class="border-l border-slate-700/80 pl-2">
+        <button id="btn-planner-exit" class="btn-sci-fi text-xs py-1.5 px-3 bg-slate-800 hover:bg-slate-700 text-white border-slate-600">
+          💾 完成規劃
+        </button>
+      </div>
+    `;
+
+    document.getElementById('btn-planner-move')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      SoundEffects.playClick();
+      this.setPlannerTool('MOVE_MACHINE');
+    });
+
+    document.getElementById('btn-planner-yellow')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      SoundEffects.playClick();
+      this.setPlannerTool('PAINT_YELLOW');
+    });
+
+    document.getElementById('btn-planner-white')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      SoundEffects.playClick();
+      this.setPlannerTool('PAINT_WHITE');
+    });
+
+    document.getElementById('btn-planner-exit')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      SoundEffects.playClick();
+      this.togglePlannerMode(false);
+      this.onStateUpdated();
     });
   }
 
