@@ -369,11 +369,15 @@ export class CleanroomScene extends Phaser.Scene {
         );
 
         container.on('pointerdown', (_pointer: Phaser.Input.Pointer) => {
+          if (document.querySelector('.modal-backdrop') || (document.getElementById('modal-container')?.children.length ?? 0) > 0) {
+            return;
+          }
           this.pointerDownMachineId = machine.id;
           if (_pointer.event) _pointer.event.stopPropagation();
         });
 
         container.on('pointerover', () => {
+          if (document.querySelector('.modal-backdrop') || (document.getElementById('modal-container')?.children.length ?? 0) > 0) return;
           const currentEntry = this.machineMap.get(machine.id);
           if (currentEntry?.sprite) currentEntry.sprite.setTint(0x38bdf8);
         });
@@ -382,6 +386,10 @@ export class CleanroomScene extends Phaser.Scene {
           if (currentEntry?.sprite) currentEntry.sprite.clearTint();
         });
         container.on('pointerup', (_pointer: Phaser.Input.Pointer) => {
+          if (document.querySelector('.modal-backdrop') || (document.getElementById('modal-container')?.children.length ?? 0) > 0) {
+            this.pointerDownMachineId = null;
+            return;
+          }
           if (this.pointerDownMachineId === machine.id && this.totalDragDistance <= this.dragThreshold) {
             if (_pointer.event) _pointer.event.stopPropagation();
             SoundEffects.playClick();
@@ -868,6 +876,9 @@ export class CleanroomScene extends Phaser.Scene {
    */
   private setupCameraControls(): void {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (document.querySelector('.modal-backdrop') || (document.getElementById('modal-container')?.children.length ?? 0) > 0) {
+        return;
+      }
       if (pointer.leftButtonDown()) {
         this.isDragging = true;
         this.dragStartX = pointer.x;
@@ -910,6 +921,10 @@ export class CleanroomScene extends Phaser.Scene {
       this.isDragging = false;
       this.pointerDownMachineId = null;
 
+      if (document.querySelector('.modal-backdrop') || (document.getElementById('modal-container')?.children.length ?? 0) > 0) {
+        return;
+      }
+
       // 規劃模式點選地磚
       if (!wasDragging && this.isPlannerMode) {
         const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
@@ -929,6 +944,9 @@ export class CleanroomScene extends Phaser.Scene {
     });
 
     this.input.on('wheel', (_pointer: any, _gameObjects: any, _deltaX: number, deltaY: number) => {
+      if (document.querySelector('.modal-backdrop') || (document.getElementById('modal-container')?.children.length ?? 0) > 0) {
+        return;
+      }
       const newZoom = Phaser.Math.Clamp(this.cameras.main.zoom - deltaY * 0.001, 0.45, 2.2);
       this.cameras.main.setZoom(newZoom);
     });
