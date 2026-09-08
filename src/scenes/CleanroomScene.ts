@@ -264,6 +264,15 @@ export class CleanroomScene extends Phaser.Scene {
    * 渲染全廠機台 (含等角深度排序 Depth Sorting 與互動點擊)
    */
   public renderMachines(): void {
+    // 清理已不存在於當前存檔的舊機台 (例如更換帳號、報廢變賣)
+    const validIds = new Set(this.saveGame.machines.map((m) => m.id));
+    for (const [id, entry] of this.machineMap) {
+      if (!validIds.has(id)) {
+        entry.container.destroy();
+        this.machineMap.delete(id);
+      }
+    }
+
     // 建立工程師索引
     const staffMap = new Map<string, StaffData>(this.saveGame.staff.map((s) => [s.id, s]));
 
@@ -632,18 +641,23 @@ export class CleanroomScene extends Phaser.Scene {
    * 生成天花板 OHT 懸吊天車 (Overhead Hoist Transport Shuttle)
    */
   private spawnOHTShuttles(): void {
+    if (!this.saveGame.unlockedFeatures.oht) return;
+    const isSHR = !!this.saveGame.unlockedFeatures.shrOht;
     const shuttle = this.add.container(0, -160);
     shuttle.setDepth(500);
 
     if (this.textures.exists('oht_shuttle')) {
       const ohtSprite = this.add.image(0, 16, 'oht_shuttle');
       ohtSprite.setDisplaySize(56, 42);
+      if (isSHR) {
+        ohtSprite.setTint(0x34d399);
+      }
       shuttle.add(ohtSprite);
     } else {
       const railHanger = this.add.rectangle(0, 0, 8, 12, 0x475569);
-      const body = this.add.rectangle(0, 10, 32, 18, 0x0ea5e9);
+      const body = this.add.rectangle(0, 10, 32, 18, isSHR ? 0x10b981 : 0x0ea5e9);
       const foup = this.add.rectangle(0, 22, 20, 16, 0x10b981);
-      const led = this.add.circle(12, 10, 3, 0x22c55e);
+      const led = this.add.circle(12, 10, 3, isSHR ? 0x10b981 : 0x22c55e);
       shuttle.add([railHanger, body, foup, led]);
     }
 
@@ -653,7 +667,7 @@ export class CleanroomScene extends Phaser.Scene {
     this.ohtShuttles.push({
       container: shuttle,
       progress: 0,
-      speed: 0.002
+      speed: isSHR ? 0.005 : 0.002
     });
   }
 
@@ -970,14 +984,69 @@ export class CleanroomScene extends Phaser.Scene {
   }
 
   /**
-   * 刷新存檔資料 (由外部 GameSimulation 呼叫)
+   * 刷新存檔資料 (由外部 GameSimulation 或切換帳號呼叫)
    */
   public updateState(state: SaveGameV2): void {
+    const isUserSwitched = !this.saveGame || (state.userId && this.saveGame.userId !== state.userId);
     this.saveGame = state;
-    this.renderFloor();
-    this.renderMachines();
-    if (this.saveGame.unlockedFeatures.agv && this.agvCarriers.length === 0) {
-      this.spawnAGVCarriers();
+
+    if (isUserSwitched) {
+      // 徹底清除舊帳號所有機台 Container 與精靈
+      for (const [_, entry] of this.machineMap) {
+        entry.container.destroy();
+      }
+      this.machineMap.clear();
+
+      // 清除舊技術員、AGV、OHT
+      for (const tech of this.technicians) {
+        tech.container.destroy();
+      }
+      this.technicians = [];
+
+      for (const agv of this.agvCarriers) {
+        agv.container.destroy();
+      }
+      this.agvCarriers = [];
+
+      for (const oht of this.ohtShuttles) {
+        oht.container.destroy();
+      }
+      this.ohtShuttles = [];
+
+      this.movingMachineId = null;
+      this.selectionRingGraphics.clear();
+      this.plannerIndicatorGraphics.clear();
+
+      // 重新繪製新帳號無塵室全貌 (地磚、黃光區、天軌、機台、技術員、載具)
+      this.renderFloor();
+      this.renderOHTRails();
+      this.renderMachines();
+      this.spawnTechnicians();
+      if (this.saveGame.unlockedFeatures.agv) {
+        this.spawnAGVCarriers();
+      }
+      if (this.saveGame.unlockedFeatures.oht) {
+        this.spawnOHTShuttles();
+      }
+    } else {
+      this.renderFloor();
+      this.renderMachines();
+      if (this.saveGame.unlockedFeatures.agv && this.agvCarriers.length === 0) {
+        this.spawnAGVCarriers();
+      }
+      if (this.saveGame.unlockedFeatures.oht) {
+        if (this.ohtShuttles.length === 0) {
+          this.spawnOHTShuttles();
+        } else if (this.saveGame.unlockedFeatures.shrOht) {
+          for (const s of this.ohtShuttles) {
+            s.speed = 0.005;
+            const img = s.container.getAt(0) as Phaser.GameObjects.Image;
+            if (img && img.setTint) {
+              img.setTint(0x34d399);
+            }
+          }
+        }
+      }
     }
   }
 }

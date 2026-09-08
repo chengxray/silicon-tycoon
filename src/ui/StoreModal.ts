@@ -12,6 +12,7 @@ import { SoundEffects } from '../audio/SoundEffects';
 import { AchievementEngine } from '../engine/AchievementEngine';
 import { FinanceEngine } from '../engine/FinanceEngine';
 import { TechTreeModal } from './TechTreeModal';
+import { SaveGameService } from '../services/SaveGameService';
 
 export interface StoreEquipmentItem {
   modelId: string;
@@ -27,7 +28,7 @@ export interface StoreEquipmentItem {
 }
 
 export class StoreModal {
-  private static activeCategory: MachineCategory | 'FLEET' = 'LITHO';
+  private static activeCategory: MachineCategory | 'FLEET' | 'AMHS' = 'LITHO';
 
   // 完整半導體機台採購型錄
   public static readonly STORE_CATALOG: StoreEquipmentItem[] = [
@@ -296,13 +297,14 @@ export class StoreModal {
     state: SaveGameV2,
     onUpdate: () => void
   ): void {
-    const categories: { key: MachineCategory | 'FLEET'; label: string; icon: string }[] = [
+    const categories: { key: MachineCategory | 'FLEET' | 'AMHS'; label: string; icon: string }[] = [
       { key: 'LITHO', label: 'LITHO 微影機', icon: '🔦' },
       { key: 'TRACK', label: 'TRACK 塗膠顯影 (瓶頸)', icon: '🌀' },
       { key: 'FILM', label: 'FILM 薄膜成長', icon: '✨' },
       { key: 'ETCH', label: 'ETCH 蝕刻製程', icon: '⚡' },
       { key: 'DIFF', label: 'DIFF 擴散植入', icon: '🎯' },
       { key: 'CMP', label: 'CMP 平坦研磨', icon: '💿' },
+      { key: 'AMHS', label: 'AMHS 運送設備', icon: '🚚' },
       { key: 'FLEET', label: '廠內現役機台 (' + state.machines.length + ')', icon: '🏭' }
     ];
 
@@ -324,7 +326,7 @@ export class StoreModal {
                   </span>
                 </h3>
                 <p class="text-xs text-slate-400">
-                  購置先進製程設備，並聯 Track 消除微影瓶頸，持續大修維持在線妥善率！
+                  購置先進製程設備，並聯 Track 消除微影瓶頸，升級天軌天車與無人自走車 (AMHS)！
                 </p>
               </div>
             </div>
@@ -358,7 +360,9 @@ export class StoreModal {
           <div class="modal-body p-6 overflow-y-auto flex-1 space-y-4">
             ${this.activeCategory === 'FLEET'
               ? this.renderFleetTab(state)
-              : this.renderCatalogTab(state)
+              : (this.activeCategory === 'AMHS'
+                  ? this.renderAMHSTab(state)
+                  : this.renderCatalogTab(state))
             }
           </div>
 
@@ -374,6 +378,157 @@ export class StoreModal {
     `;
 
     this.bindEvents(container, state, onUpdate);
+  }
+
+  private static renderAMHSTab(state: SaveGameV2): string {
+    const amhsItems = [
+      {
+        feature: 'manual',
+        name: '人工卡匣徒步搬運 (Manual Handling)',
+        tier: 1,
+        price: 0,
+        speed: '1.0 格/秒',
+        assetPath: ASSET_REGISTRY.characters.tech_cleanroom.path,
+        isPurchased: true,
+        isUnlocked: true,
+        canAfford: true,
+        description: '無塵衣技術員手持晶圓盒穿梭各站手動交接。搬運速度慢，人員走動產生微塵，交接等待時間較長。',
+        scienceNote: '半導體萌芽期仰賴人員手動搬運卡匣，每小時人員走動產生之微塵顆粒達數萬顆，對良率是巨大隱憂。',
+        benefits: ['基礎徒步搬運', '無設備採購支出']
+      },
+      {
+        feature: 'agv',
+        name: 'AGV 磁導激光無人自走車 (Automated Guided Vehicle)',
+        tier: 1,
+        price: 8_000_000,
+        speed: '2.5 格/秒',
+        assetPath: ASSET_REGISTRY.characters.agv_carrier.path,
+        isPurchased: !!state.unlockedFeatures.agv,
+        isUnlocked: state.player.foundryTier >= 1,
+        canAfford: state.player.cash >= 8_000_000,
+        description: '地面自主導航輪式無人載具，依循地面雷射激光自主穿梭於各站機台之間。自動對位上下料，大幅降低人員進出無塵室落塵。',
+        scienceNote: 'AGV 採用光學雷達 (LiDAR) 與磁帶導引，實現無塵室地面自動化運輸，有效平滑各站排隊緩衝並消弭交接震動。',
+        benefits: ['解鎖地面無人自走車自主巡航', '消弭人工搬運落塵提升良率', '達成自動化物料搬運 AMHS 里程碑']
+      },
+      {
+        feature: 'oht',
+        name: 'OHT 高速天軌懸吊天車 (Overhead Hoist Transport)',
+        tier: 2,
+        price: 35_000_000,
+        speed: '5.0 格/秒',
+        assetPath: ASSET_REGISTRY.characters.oht_shuttle.path,
+        isPurchased: !!state.unlockedFeatures.oht,
+        isUnlocked: state.player.foundryTier >= 2,
+        canAfford: state.player.cash >= 35_000_000,
+        description: '天花板立體閉迴路天軌懸吊天車系統，晶圓 FOUP 完全在空中高速飛行傳送。徹底解耦地面人車交通，是現代晶圓廠的核心骨幹！',
+        scienceNote: '現代 300mm 超級晶圓廠的神經中樞。透過空中立體懸吊軌道直接降下垂直機械爪 (Hoist) 對位 Load Port，站點傳送時間縮短 70%！',
+        benefits: ['解鎖天花板空中天軌高速巡航', '站間交接時間縮短 70%', '徹底消除地面交織塞車瓶頸']
+      },
+      {
+        feature: 'shrOht',
+        name: 'SHR 超急件綠波磁浮天車 (Super Hot Run OHT)',
+        tier: 4,
+        price: 120_000_000,
+        speed: '8.0 格/秒',
+        assetPath: ASSET_REGISTRY.characters.oht_shuttle.path,
+        isPurchased: !!state.unlockedFeatures.shrOht,
+        isUnlocked: state.player.foundryTier >= 4,
+        canAfford: state.player.cash >= 120_000_000,
+        description: '旗艦級超急件動態調度系統！改裝超導磁浮提速馬達，天車空中巡航提速 2.5 倍，並在天軌享有超急件綠波路權 (翠綠色科技特效)！',
+        scienceNote: 'Super Hot Run (SHR) 為晶圓代工廠為戰略客戶特批之綠波急件協議，所有天軌道岔與機台排程優先強占，極速交件！',
+        benefits: ['天車飛行速度大幅激增 2.5 倍', '空中天車呈現綠波磁浮特效 (Emerald Glow)', '大幅壓制 Q-Time 逾期報廢風險']
+      }
+    ];
+
+    return `
+      <div class="p-3.5 rounded-xl bg-cyan-950/20 border border-cyan-600/30 text-xs text-cyan-200 flex items-start gap-2.5 mb-4">
+        <span class="text-xl">🚚</span>
+        <div>
+          <span class="font-bold text-white text-sm">AMHS (Automated Material Handling System) 廠務自動化搬運體系</span>
+          <p class="text-slate-300 text-[11px] mt-0.5">
+            晶圓搬運載具從【人工手動】升級為【地面 AGV 自走車】與【空中 OHT 天軌天車】，能大幅消除無塵室人員落塵、減少震動並大幅提升跨站點交接吞吐速度！
+          </p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        ${amhsItems.map((item) => {
+          return `
+            <div class="p-4 rounded-xl bg-slate-900/80 border ${item.isPurchased ? 'border-emerald-500/50 bg-emerald-950/10' : (item.isUnlocked ? 'border-slate-800 hover:border-amber-500/40' : 'border-slate-800/40 opacity-70')} transition-all flex flex-col justify-between space-y-3">
+              <div class="flex items-start gap-3">
+                <div class="store-thumb-box machine-card-thumb w-16 h-16 rounded-lg bg-slate-950 border ${item.isPurchased ? 'border-emerald-500/40 shadow-inner shadow-emerald-500/20' : 'border-slate-800'} flex-shrink-0 flex items-center justify-center p-1 overflow-hidden relative">
+                  <img src="${item.assetPath}" alt="${item.name}" class="w-full h-full object-contain filter drop-shadow" style="max-width: 56px; max-height: 56px; ${item.feature === 'shrOht' && item.isPurchased ? 'filter: drop-shadow(0 0 8px #10b981);' : ''}" />
+                  ${item.isPurchased ? '<span class="absolute top-1 right-1 text-[10px] bg-emerald-500 text-slate-950 font-black rounded px-1">ACTIVE</span>' : ''}
+                </div>
+
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between gap-1">
+                    <h4 class="font-bold text-white text-sm truncate">${item.name}</h4>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-mono ${item.isUnlocked ? 'bg-cyan-500/20 text-cyan-300' : 'bg-slate-800 text-slate-400'}">
+                      Tier ${item.tier}
+                    </span>
+                  </div>
+                  <div class="text-[11px] text-slate-400 mt-1 line-clamp-2">
+                    ${item.description}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Specs -->
+              <div class="grid grid-cols-2 gap-2 p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80 text-xs">
+                <div>
+                  <div class="text-[10px] text-slate-400">搬運速度</div>
+                  <div class="font-mono font-bold text-cyan-300">${item.speed}</div>
+                </div>
+                <div>
+                  <div class="text-[10px] text-slate-400">升級費用</div>
+                  <div class="font-mono font-bold ${item.price === 0 ? 'text-emerald-400' : 'text-amber-300'}">
+                    ${item.price === 0 ? '初始標準配備' : `NT$ ${item.price.toLocaleString()}`}
+                  </div>
+                </div>
+                <div class="col-span-2 pt-1 border-t border-slate-800/60 text-[11px] text-slate-300 space-y-0.5">
+                  ${item.benefits.map(b => `<div class="flex items-center gap-1.5"><span class="text-emerald-400 font-bold">✓</span><span>${b}</span></div>`).join('')}
+                </div>
+              </div>
+
+              <!-- Actions -->
+              <div class="flex items-center gap-2">
+                <button
+                  class="btn-amhs-info px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs flex items-center gap-1 transition-colors"
+                  data-title="${item.name}"
+                  data-note="${item.scienceNote}"
+                  title="查看 AMHS 搬運科普原理"
+                >
+                  <span>ℹ️</span>
+                  <span>原理</span>
+                </button>
+
+                ${item.isPurchased ? `
+                  <button disabled class="flex-1 py-2 px-3 rounded-lg bg-emerald-950/50 border border-emerald-500/40 text-emerald-300 text-xs font-bold text-center cursor-default">
+                    ✔️ 已升級掌握 (現役運作中)
+                  </button>
+                ` : (!item.isUnlocked ? `
+                  <button class="btn-open-techtree-from-store flex-1 py-2 px-3 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-400 hover:text-cyan-300 text-xs text-center cursor-pointer">
+                    🔒 需晉升至 Tier ${item.tier} 研發解鎖
+                  </button>
+                ` : `
+                  <button
+                    class="btn-buy-amhs flex-1 btn-sci-fi justify-center py-2 text-xs font-bold cursor-pointer ${item.canAfford ? 'bg-amber-600 hover:bg-amber-500 border-amber-400 text-white shadow-lg shadow-amber-600/20' : 'opacity-50 cursor-not-allowed bg-slate-800'}"
+                    data-feature="${item.feature}"
+                    data-price="${item.price}"
+                    data-name="${item.name}"
+                    ${!item.canAfford ? 'disabled' : ''}
+                  >
+                    <span>🛒</span>
+                    <span>立即升級購置 (NT$ ${item.price.toLocaleString()})</span>
+                  </button>
+                `)}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
   }
 
   private static renderCatalogTab(state: SaveGameV2): string {
@@ -714,6 +869,52 @@ export class StoreModal {
         state.machines.splice(machineIndex, 1);
 
         SoundEffects.playCoinChime();
+        onUpdate();
+        this.render(container, state, onUpdate);
+      });
+    });
+
+    // AMHS 科普彈窗
+    container.querySelectorAll('.btn-amhs-info').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        SoundEffects.playClick();
+        const note = (e.currentTarget as HTMLElement).getAttribute('data-note') || '';
+        const title = (e.currentTarget as HTMLElement).getAttribute('data-title') || '';
+        alert(`🚚 廠務自動化物料搬運 (AMHS) 原理解析：【${title}】\n\n${note}`);
+      });
+    });
+
+    // 採購 AMHS 運送設備
+    container.querySelectorAll('.btn-buy-amhs').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const feature = (e.currentTarget as HTMLElement).getAttribute('data-feature');
+        const price = parseInt((e.currentTarget as HTMLElement).getAttribute('data-price') || '0', 10);
+        const name = (e.currentTarget as HTMLElement).getAttribute('data-name') || '';
+
+        if (state.player.cash < price) {
+          alert('流動資金不足，無法採購此運送設備！');
+          return;
+        }
+
+        if (!confirm(`確定要投資 NT$ ${price.toLocaleString()} 採購並升級【${name}】嗎？`)) {
+          return;
+        }
+
+        state.player.cash -= price;
+        FinanceEngine.recordCapEx(state, price);
+
+        if (feature === 'agv') {
+          state.unlockedFeatures.agv = true;
+        } else if (feature === 'oht') {
+          state.unlockedFeatures.oht = true;
+        } else if (feature === 'shrOht') {
+          state.unlockedFeatures.shrOht = true;
+        }
+
+        SaveGameService.saveToLocalStorage(state);
+        AchievementEngine.checkAchievements(state);
+        SoundEffects.playFanfare();
+
         onUpdate();
         this.render(container, state, onUpdate);
       });

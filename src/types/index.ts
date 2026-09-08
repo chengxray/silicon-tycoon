@@ -36,12 +36,14 @@ export interface PlayerProfile {
   totalOrdersFulfilled?: number;
   totalWafersDelivered?: number;
   rdInvestedCash?: number;
+  tutorialCompleted?: boolean;
 }
 
 export interface UnlockedFeatures {
   cmp: boolean;
   agv: boolean;
   oht: boolean;
+  shrOht?: boolean;
   mesAutoDispatch: boolean;
   mixAndMatchLitho: boolean;
 }

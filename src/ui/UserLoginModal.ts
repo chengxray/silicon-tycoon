@@ -179,6 +179,14 @@ export class UserLoginModal {
               </button>
             </div>
 
+            <!-- 整機重置 (全部刪除) -->
+            <div class="pt-2 flex items-center justify-between border-t border-slate-800/80">
+              <button id="btn-factory-reset-login" class="text-[11px] text-red-400 hover:text-red-300 hover:underline flex items-center gap-1.5 transition-colors cursor-pointer" title="清除本裝置所有玩家存檔與紀錄，從零開始體驗">
+                <span>💥</span>
+                <span>整機資料重置 (清除全部資料與教學，重新開始)</span>
+              </button>
+            </div>
+
           </div>
 
           <!-- PvZ Footer: OK (進入遊戲) / Cancel -->
@@ -342,6 +350,16 @@ export class UserLoginModal {
       // 重設選擇為活躍使用者
       this.selectedUserId = SaveGameService.getActiveUserProfile().id;
       this.render(container, currentState, onUserSwitched, allowCancel);
+    });
+
+    // 整機重置按鈕
+    document.getElementById('btn-factory-reset-login')?.addEventListener('click', () => {
+      SoundEffects.playClick();
+      if (confirm('⚠️ 警告：整機資料重置將徹底清除本裝置上的所有玩家帳號、廠房進度、財務紀錄與暫存設定，無法復原！\n\n確定要刪除裝置全部資料使玩家能從零開始重新體驗嗎？')) {
+        SaveGameService.factoryResetAllData();
+        alert('整機資料已全數清除！即將重新啟動遊戲。');
+        window.location.reload();
+      }
     });
 
     // 進入遊戲 (OK / Play)

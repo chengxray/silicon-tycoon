@@ -59,7 +59,8 @@ export class UIManager {
       onOpenFinance: () => this.openFinancialReport(),
       onOpenLogin: () => this.openUserLogin(),
       onOpenPlanner: () => this.togglePlannerMode(),
-      onOpenTechTree: () => this.openTechTree()
+      onOpenTechTree: () => this.openTechTree(),
+      onOpenFactoryReset: () => this.openFactoryResetConfirmation()
     });
 
     // 初始化 Dev Console 監聽器
@@ -71,10 +72,12 @@ export class UIManager {
       FoundrySetupModal.show(state, () => {
         this.render();
         this.onStateUpdated();
-        if (!TutorialOverlay.isCompleted()) {
+        if (!TutorialOverlay.isCompleted(this.state)) {
           this.openTutorial();
         }
       });
+    } else if (!TutorialOverlay.isCompleted(this.state)) {
+      setTimeout(() => this.openTutorial(), 400);
     }
 
     this.render();
@@ -459,6 +462,9 @@ export class UIManager {
       this.onUserSwitched?.(newState);
       this.render();
       this.onStateUpdated();
+      if (!TutorialOverlay.isCompleted(newState)) {
+        setTimeout(() => this.openTutorial(), 400);
+      }
     });
   }
 
@@ -575,5 +581,70 @@ export class UIManager {
     notice.innerText = msg;
     document.body.appendChild(notice);
     setTimeout(() => notice.remove(), 2500);
+  }
+
+  public openFactoryResetConfirmation(): void {
+    const container = document.getElementById('modal-container');
+    if (!container) return;
+
+    SoundEffects.playClick();
+
+    const closeModal = () => {
+      container.innerHTML = '';
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeModal();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    container.innerHTML = `
+      <div id="modal-backdrop-reset" class="modal-backdrop">
+        <div class="modal-content glass-panel max-w-md border-2 border-red-500/80 bg-slate-950 text-slate-100 p-6 rounded-2xl shadow-2xl shadow-red-950/60 animate-scaleUp">
+          <div class="flex items-center gap-3 text-red-400 text-base font-black border-b border-red-500/30 pb-3">
+            <span class="text-2xl">⚠️</span>
+            <span>高風險操作：整機資料重置確認</span>
+          </div>
+
+          <div class="py-4 text-xs text-slate-300 space-y-3 leading-relaxed">
+            <p class="text-red-300 font-bold">
+              您即將徹底清空本裝置（瀏覽器）上的所有《Silicon Tycoon》遊戲存檔與資料！
+            </p>
+            <div class="p-3 bg-red-950/30 border border-red-500/40 rounded-xl space-y-1.5 text-[11px] text-slate-300">
+              <div>• 💥 徹底刪除所有玩家帳號、執行長身分與歷史成就記錄</div>
+              <div>• 🏭 清空所有廠房無塵室機台配置、科技研發與累積資金</div>
+              <div>• 🔄 重置新手教學標記，使玩家能從零開始重新體驗完整流程</div>
+              <div>• 🚫 此動作不可逆，無法復原未匯出之存檔！</div>
+            </div>
+            <p class="text-slate-400 text-[11px]">
+              若您確認要徹底刪除全部資料重新開始，請點擊下方紅色按鈕。
+            </p>
+          </div>
+
+          <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+            <button id="btn-cancel-factory-reset" class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors cursor-pointer">
+              取消返回
+            </button>
+            <button id="btn-confirm-factory-reset" class="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-500 rounded-lg shadow-lg shadow-red-900/50 flex items-center gap-1.5 transition-all cursor-pointer">
+              <span>💥</span>
+              <span>確定清空全部資料並重置</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('btn-cancel-factory-reset')?.addEventListener('click', closeModal);
+    document.getElementById('modal-backdrop-reset')?.addEventListener('click', (e) => {
+      if (e.target === document.getElementById('modal-backdrop-reset')) closeModal();
+    });
+
+    document.getElementById('btn-confirm-factory-reset')?.addEventListener('click', () => {
+      SoundEffects.playClick();
+      SaveGameService.factoryResetAllData();
+      alert('全機資料已全數清空！即將重新整理進入全新遊戲。');
+      window.location.reload();
+    });
   }
 }

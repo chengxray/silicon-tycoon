@@ -29,11 +29,23 @@ export class TutorialOverlay {
     this.render(container, state, onUpdate);
   }
 
-  public static isCompleted(): boolean {
-    return localStorage.getItem('silicon_tycoon_tutorial_completed') === 'true';
+  public static isCompleted(state?: SaveGameV2): boolean {
+    if (state?.player?.tutorialCompleted !== undefined) {
+      return state.player.tutorialCompleted;
+    }
+    if (state?.userId) {
+      return localStorage.getItem(`silicon_tycoon_tutorial_completed_${state.userId}`) === 'true';
+    }
+    return false;
   }
 
-  public static markCompleted(): void {
+  public static markCompleted(state?: SaveGameV2): void {
+    if (state?.player) {
+      state.player.tutorialCompleted = true;
+    }
+    if (state?.userId) {
+      localStorage.setItem(`silicon_tycoon_tutorial_completed_${state.userId}`, 'true');
+    }
     localStorage.setItem('silicon_tycoon_tutorial_completed', 'true');
   }
 
@@ -236,7 +248,8 @@ export class TutorialOverlay {
     const close = () => {
       SoundEffects.playClick();
       container.innerHTML = '';
-      this.markCompleted();
+      TutorialOverlay.markCompleted(state);
+      onUpdate();
     };
 
     document.getElementById('btn-close-tutorial')?.addEventListener('click', close);
@@ -305,7 +318,7 @@ export class TutorialOverlay {
         container.innerHTML = '';
         WaferMapModal.show(state, null, () => onUpdate());
       } else if (action === 'finish') {
-        this.markCompleted();
+        TutorialOverlay.markCompleted(state);
         SoundEffects.playFanfare();
         container.innerHTML = '';
         onUpdate();

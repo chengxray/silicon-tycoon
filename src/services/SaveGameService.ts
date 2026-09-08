@@ -55,12 +55,14 @@ export class SaveGameService {
         unlockedCleanroomClass: 'Class 10000',
         totalOrdersFulfilled: 0,
         totalWafersDelivered: 0,
-        rdInvestedCash: 0
+        rdInvestedCash: 0,
+        tutorialCompleted: false
       },
       unlockedFeatures: {
         cmp: false,
         agv: false,
         oht: false,
+        shrOht: false,
         mesAutoDispatch: false, // 完成新手教學後解鎖
         mixAndMatchLitho: false
       },
@@ -346,6 +348,27 @@ export class SaveGameService {
 
     localStorage.setItem(this.ACTIVE_USER_ID_KEY, userId);
     return this.loadFromLocalStorage();
+  }
+
+  /**
+   * 整機重置：徹底清除本裝置上的所有玩家帳號、存檔、教學進度與快取
+   */
+  public static factoryResetAllData(): void {
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.toLowerCase().startsWith('silicon_tycoon'))) {
+          keysToRemove.push(key);
+        }
+      }
+      for (const key of keysToRemove) {
+        localStorage.removeItem(key);
+      }
+    } catch (e) {
+      console.warn('清空存檔時發生例外:', e);
+      localStorage.clear();
+    }
   }
 
   /**
