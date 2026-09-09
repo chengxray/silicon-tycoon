@@ -6,7 +6,7 @@
  * 3. 廠務班別切換（兩班制省錢 vs 三班制解鎖 🛡️ TPM 24H 零故障在線維護）
  */
 
-import { SaveGameV2, StaffData, StaffRank, MachineCategory, ShiftMode, WorkShift } from '../types';
+import { SaveGameV2, StaffData, StaffRank, StaffSpecialty, ShiftMode, WorkShift } from '../types';
 import { SoundEffects } from '../audio/SoundEffects';
 import { AchievementEngine } from '../engine/AchievementEngine';
 import { MaintenanceEngine } from '../engine/MaintenanceEngine';
@@ -16,7 +16,7 @@ interface Candidate {
   id: string;
   name: string;
   rank: StaffRank;
-  moduleSpecialty: MachineCategory;
+  moduleSpecialty: StaffSpecialty;
   signingBonus: number;
   salary: number;
   description: string;
@@ -50,7 +50,7 @@ export class HRModal {
   }
 
   private static generateCandidates(foundryTier: number): void {
-    const specialties: MachineCategory[] = ['LITHO', 'TRACK', 'FILM', 'ETCH', 'DIFF', 'CMP'];
+    const specialties: StaffSpecialty[] = ['PIE', 'LITHO', 'TRACK', 'FILM', 'ETCH', 'DIFF', 'CMP'];
 
     this.candidates = [];
 
@@ -63,24 +63,32 @@ export class HRModal {
       let rank: StaffRank = 'Young Specialist';
       let signingBonus = 20_000;
       let salary = 45_000;
-      let description = '專精基礎機台操作，磨損累積 -10%，微影 k1 -0.01。適合操作 Tier 1~2。';
+      let description = spec === 'PIE'
+        ? '跨站點製程整合專才，指派訂單可加速工步 +8%，保障交貨良率 +3%'
+        : '專精基礎機台操作，磨損累積 -10%，微影 k1 -0.01。適合操作 Tier 1~2。';
 
       const roll = Math.random();
       if (foundryTier >= 5 && roll > 0.6) {
         rank = 'Fellow';
         signingBonus = 500_000;
         salary = 350_000;
-        description = '頂級半導體物理泰斗，磨損累積 -80%，微影 k1 -0.06，良率 +15%，可抵銷先進製程視窗損失！';
+        description = spec === 'PIE'
+          ? '世界級晶圓製程整合權威泰斗，指派訂單可加速工步 +40%，保障交貨良率 +16%！'
+          : '頂級半導體物理泰斗，磨損累積 -80%，微影 k1 -0.06，良率 +15%，可抵銷先進製程視窗損失！';
       } else if (foundryTier >= 3 && roll > 0.4) {
         rank = 'Senior Engineer';
         signingBonus = 120_000;
         salary = 150_000;
-        description = '多年產線調機權威，磨損累積 -50%，微影 k1 -0.04，良率 +10%。適合操作 Tier 3~5。';
+        description = spec === 'PIE'
+          ? '多年製程整合資深主管，指派訂單可加速工步 +25%，保障交貨良率 +10%'
+          : '多年產線調機權威，磨損累積 -50%，微影 k1 -0.04，良率 +10%。適合操作 Tier 3~5。';
       } else if (foundryTier >= 2 && roll > 0.3) {
         rank = 'Skilled Worker';
         signingBonus = 50_000;
         salary = 75_000;
-        description = '熟練製程技師，磨損累積 -25%，微影 k1 -0.02，良率 +5%。適合操作 Tier 1~3。';
+        description = spec === 'PIE'
+          ? '專任製程整合工程師，指派訂單可加速工步 +15%，保障交貨良率 +6%'
+          : '熟練製程技師，磨損累積 -25%，微影 k1 -0.02，良率 +5%。適合操作 Tier 1~3。';
       }
 
       this.candidates.push({
@@ -305,8 +313,8 @@ export class HRModal {
                       <span class="px-2 py-0.5 rounded text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30">
                         ${staff.rank}
                       </span>
-                      <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-cyan-500/20 text-cyan-300">
-                        ${staff.moduleSpecialty}
+                      <span class="px-2 py-0.5 rounded text-[10px] font-mono ${staff.moduleSpecialty === 'PIE' ? 'bg-indigo-500/25 text-indigo-300 border border-indigo-500/40 font-bold' : 'bg-cyan-500/20 text-cyan-300'}">
+                        ${staff.moduleSpecialty === 'PIE' ? '👨‍💼 製程整合 PIE' : staff.moduleSpecialty}
                       </span>
                     </div>
                     <div class="text-xs text-slate-400 mt-0.5 flex items-center gap-2 font-mono">
@@ -414,8 +422,8 @@ export class HRModal {
                     <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30">
                       ${staff.rank}
                     </span>
-                    <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-cyan-500/20 text-cyan-300">
-                      專長: ${staff.moduleSpecialty}
+                    <span class="px-2 py-0.5 rounded text-[10px] font-mono ${staff.moduleSpecialty === 'PIE' ? 'bg-indigo-500/25 text-indigo-300 border border-indigo-500/40 font-bold' : 'bg-cyan-500/20 text-cyan-300'}">
+                      ${staff.moduleSpecialty === 'PIE' ? '👨‍💼 製程整合 PIE' : '專長: ' + staff.moduleSpecialty}
                     </span>
                   </div>
 
@@ -499,8 +507,8 @@ export class HRModal {
                   </div>
                 </div>
 
-                <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                  模組: ${can.moduleSpecialty}
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono ${can.moduleSpecialty === 'PIE' ? 'bg-indigo-500/25 text-indigo-300 border border-indigo-500/40 font-bold' : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'}">
+                  ${can.moduleSpecialty === 'PIE' ? '👨‍💼 製程整合 PIE' : '模組: ' + can.moduleSpecialty}
                 </span>
               </div>
 

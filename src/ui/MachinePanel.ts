@@ -15,6 +15,9 @@ import { ProductionEngine } from '../engine/ProductionEngine';
 import { RayleighEngine } from '../engine/RayleighEngine';
 import { FinanceEngine } from '../engine/FinanceEngine';
 import { StoreModal } from './StoreModal';
+import { QuestEngine } from '../engine/QuestEngine';
+import { AchievementEngine } from '../engine/AchievementEngine';
+import { SaveGameService } from '../services/SaveGameService';
 
 export class MachinePanel {
   public static show(
@@ -371,6 +374,26 @@ export class MachinePanel {
                   </option>
                 `).join('')}
               </select>
+
+              <!-- 工程師日常巡檢維護功能 -->
+              <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                <div class="text-[11px] text-slate-400">
+                  ${assignedStaff ? `
+                    <span>駐機人員：<strong class="text-slate-200">${assignedStaff.name}</strong> (疲勞 ${Math.round(assignedStaff.fatigue)}%)</span>
+                  ` : `
+                    <span class="text-amber-400/80">💡 指派工程師駐機後，即可執行日常巡檢以降低磨損！</span>
+                  `}
+                </div>
+                <button
+                  id="btn-engineer-inspect"
+                  class="btn-sci-fi text-xs py-1.5 px-3 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/50 text-indigo-300 flex items-center gap-1.5 cursor-pointer ${!assignedStaff || (assignedStaff && assignedStaff.fatigue >= 95) ? 'opacity-50 cursor-not-allowed' : ''}"
+                  ${!assignedStaff || (assignedStaff && assignedStaff.fatigue >= 95) ? 'disabled' : ''}
+                  title="由駐機工程師對設備執行日常精密巡檢調校與落塵清除，降低 12% 磨損度並累積每日巡檢任務"
+                >
+                  <span>🔍</span>
+                  <span>工程師日常巡檢 (消耗 8% 疲勞)</span>
+                </button>
+              </div>
             </div>
 
             <!-- 7. Machine Maintenance Actions -->
@@ -477,8 +500,47 @@ export class MachinePanel {
             if (prevMachine) prevMachine.assignedEngineerId = null;
           }
           newStaff.assignedMachineId = machine.id;
+
+          // 指派工程師進駐巡檢維護 -> 推進每日任務
+          QuestEngine.onMachineMaintained(state.questState);
+          AchievementEngine.checkAchievements(state);
+          SaveGameService.saveToLocalStorage(state);
         }
       }
+
+      onUpdate();
+      this.render(container, machine, state, onUpdate);
+    });
+
+    // 執行工程師日常巡檢維護
+    document.getElementById('btn-engineer-inspect')?.addEventListener('click', () => {
+      if (!machine.assignedEngineerId) {
+        alert('請先在上方下拉選單指派駐機工程師，方可執行巡檢！');
+        return;
+      }
+
+      const staff = state.staff.find(s => s.id === machine.assignedEngineerId);
+      if (!staff) return;
+
+      if (staff.fatigue >= 95) {
+        alert(`工程師 ${staff.name} 疲勞度過高 (${Math.round(staff.fatigue)}%)，體力不支無法執行巡檢！請至人資中心安排排休恢復精神！`);
+        return;
+      }
+
+      if (machine.wear <= 0) {
+        alert(`設備【${machine.name}】目前處於 100% 完美健康狀態，無需額外調校！`);
+        return;
+      }
+
+      SoundEffects.playClick();
+      // 降低磨損度 12%
+      machine.wear = Math.max(0, machine.wear - 12);
+      // 累積工程師疲勞 8%
+      staff.fatigue = Math.min(100, staff.fatigue + 8);
+      // 推進每日任務
+      QuestEngine.onMachineMaintained(state.questState);
+      AchievementEngine.checkAchievements(state);
+      SaveGameService.saveToLocalStorage(state);
 
       onUpdate();
       this.render(container, machine, state, onUpdate);
@@ -498,6 +560,11 @@ export class MachinePanel {
       FinanceEngine.recordMaintenance(state, overhaulCost);
       machine.wear = 0;
       machine.status = 'IDLE';
+
+      // 大修亦推進機台保養任務
+      QuestEngine.onMachineMaintained(state.questState);
+      AchievementEngine.checkAchievements(state);
+      SaveGameService.saveToLocalStorage(state);
 
       SoundEffects.playClick();
       onUpdate();

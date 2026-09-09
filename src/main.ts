@@ -18,7 +18,7 @@ import { FinanceEngine } from './engine/FinanceEngine';
 import { YieldEngine } from './engine/YieldEngine';
 import { DevConsole } from './ui/DevConsole';
 import { MachinePanel } from './ui/MachinePanel';
-import { MachineData, OrderData } from './types';
+import { MachineData } from './types';
 
 class FoundryGame {
   private state = SaveGameService.loadFromLocalStorage() || SaveGameService.createDefaultSave();
@@ -30,12 +30,28 @@ class FoundryGame {
   constructor() {
     console.log('🚀 正在啟動 Silicon Tycoon: Foundry Master 矽島霸權...');
 
-    // 1. 離線掛機模擬結算
+    // 1. 離線生產快進模擬結算 (確保關閉網頁一段時間再次打開時，產線確實向前推進)
     const now = Date.now();
-    if (this.state.lastOnlineTimestamp && now - this.state.lastOnlineTimestamp > 60 * 1000) {
-      const report = SaveGameService.calculateOfflineProgress(this.state, now);
-      console.log('離線營運結算戰報:', report);
+    if (this.state.lastOnlineTimestamp && now - this.state.lastOnlineTimestamp >= 2000) {
+      const elapsedSec = Math.floor((now - this.state.lastOnlineTimestamp) / 1000);
+      const catchup = ProductionEngine.simulateOfflineCatchUp(this.state, elapsedSec);
+      console.log('離線生產推進報告:', catchup);
+      this.state.lastOnlineTimestamp = now;
+      this.state.savedAt = now;
+      SaveGameService.saveToLocalStorage(this.state);
     }
+
+    // 網頁關閉或切換分頁時立即存檔與記錄當前離線時間戳
+    window.addEventListener('beforeunload', () => {
+      this.state.lastOnlineTimestamp = Date.now();
+      SaveGameService.saveToLocalStorage(this.state);
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        this.state.lastOnlineTimestamp = Date.now();
+        SaveGameService.saveToLocalStorage(this.state);
+      }
+    });
 
     // 2. 每日任務自適應刷新
     const todayStr = new Date().toISOString().split('T')[0];
@@ -170,9 +186,14 @@ class FoundryGame {
       }
 
       // 2. 推進在製批次 (Wafer Lots) - 依據各機台現實物理/化學加工時間精準放慢進度
-      const completedOrders: OrderData[] = [];
       for (const lot of this.state.activeLots) {
         if (lot.status === 'PROCESSING') {
+          const order = this.state.activeOrders.find((o) => o.id === lot.orderId);
+          const pieStaff = order?.assignedPieId ? this.state.staff.find((s) => s.id === order.assignedPieId) : undefined;
+          if (pieStaff && pieStaff.workShift !== 'OFF') {
+            pieStaff.fatigue = Math.min(100, pieStaff.fatigue + 0.02);
+          }
+
           // 初始化站點加工計時
           if (lot.stationProgressSeconds === undefined) {
             lot.stationProgressSeconds = 0;
@@ -180,7 +201,10 @@ class FoundryGame {
           if (!lot.stationRequiredSeconds) {
             lot.stationRequiredSeconds = ProductionEngine.getStationRequiredSeconds(
               lot.currentStation,
-              lot.litSubStep
+              lot.litSubStep,
+              undefined,
+              undefined,
+              pieStaff
             );
           }
 
@@ -190,7 +214,6 @@ class FoundryGame {
           if (lot.stationProgressSeconds >= lot.stationRequiredSeconds) {
             lot.stationProgressSeconds = 0;
 
-            const order = this.state.activeOrders.find((o) => o.id === lot.orderId);
             const nodeNm = order ? order.nodeNm : 10000;
 
             const adv = ProductionEngine.advanceLotStation(
@@ -206,7 +229,10 @@ class FoundryGame {
             // 更新下一站點所需時間
             lot.stationRequiredSeconds = ProductionEngine.getStationRequiredSeconds(
               lot.currentStation,
-              lot.litSubStep
+              lot.litSubStep,
+              undefined,
+              undefined,
+              pieStaff
             );
 
             if (adv.isLotCompleted) {
@@ -220,53 +246,34 @@ class FoundryGame {
                 const diesInLot = Math.round((order.totalDies / Math.max(1, lotsForOrder.length)) * lot.yieldMultiplier);
                 order.goodDiesDelivered = Math.min(order.totalDies, order.goodDiesDelivered + diesInLot);
 
-                // 記錄良率歷史 (滑動 5 筆)
-                this.state.rollingYieldHistory.push(Number(lot.yieldMultiplier.toFixed(3)));
-                if (this.state.rollingYieldHistory.length > 5) {
-                  this.state.rollingYieldHistory.shift();
-                }
-
                 // 推進任務進度 (若有產出良品晶圓)
                 QuestEngine.onWaferDelivered(this.state.questState, diesInLot > 0 ? lot.waferCount : 0);
 
-                // 若該訂單所有批次皆已完工
+                // 若該訂單所有批次皆已完工，切換為 COMPLETED 完工待請款狀態，保留於列表中供玩家檢視交貨良率與請款
                 const allLotsDone = lotsForOrder.every((l) => l.status === 'COMPLETED');
-                if (allLotsDone && !completedOrders.includes(order)) {
-                  completedOrders.push(order);
+                if (allLotsDone && order.status !== 'COMPLETED') {
+                  order.status = 'COMPLETED';
+                  order.deliveryYield = Number((order.goodDiesDelivered / order.totalDies).toFixed(3));
+                  const payout = EconomyEngine.settleOrderPayout(
+                    order,
+                    order.goodDiesDelivered,
+                    this.state.player,
+                    this.state.staff,
+                    0,
+                    this.state.clawbackDebt
+                  );
+                  order.expectedPayout = payout.netPayout;
+                  order.completedAtGameTime = this.state.gameTime;
+
+                  // 完工交付時，將真實交貨良率寫入近五筆滑動良率歷史
+                  this.state.rollingYieldHistory.push(order.deliveryYield);
+                  if (this.state.rollingYieldHistory.length > 5) {
+                    this.state.rollingYieldHistory.shift();
+                  }
                 }
               }
             }
           }
-        }
-      }
-
-      // 3. MES 自動派工與出貨結算 (若啟用)
-      if (this.state.unlockedFeatures.mesAutoDispatch && completedOrders.length > 0) {
-        for (const order of completedOrders) {
-          const payout = EconomyEngine.settleOrderPayout(
-            order,
-            order.goodDiesDelivered,
-            this.state.player,
-            this.state.staff,
-            0,
-            this.state.clawbackDebt
-          );
-          this.state.player.cash += payout.netPayout;
-          FinanceEngine.recordWaferSales(this.state, payout.netPayout);
-          this.state.clawbackDebt = payout.remainingDebt;
-          this.state.player.popularity = Math.min(100, this.state.player.popularity + 1);
-
-          // 累計研發晉升指標：已交付訂單數與晶圓片數
-          const orderLots = this.state.activeLots.filter((l) => l.orderId === order.id);
-          const orderWafers = orderLots.reduce((sum, l) => sum + (l.waferCount || 25), 0) || 25;
-          this.state.player.totalOrdersFulfilled = (this.state.player.totalOrdersFulfilled || 0) + 1;
-          this.state.player.totalWafersDelivered = (this.state.player.totalWafersDelivered || 0) + orderWafers;
-
-          QuestEngine.onOrderFulfilled(this.state.questState);
-
-          // 移除已出貨訂單與批次
-          this.state.activeOrders = this.state.activeOrders.filter((o) => o.id !== order.id);
-          this.state.activeLots = this.state.activeLots.filter((l) => l.orderId !== order.id);
         }
       }
     }

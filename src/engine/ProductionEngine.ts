@@ -11,9 +11,15 @@ import {
   StationType,
   LitSubStep,
   StaffData,
-  UnlockedFeatures
+  UnlockedFeatures,
+  SaveGameV2
 } from '../types';
 import { RayleighEngine } from './RayleighEngine';
+import { YieldEngine } from './YieldEngine';
+import { FinanceEngine } from './FinanceEngine';
+import { MaintenanceEngine } from './MaintenanceEngine';
+import { EconomyEngine } from './EconomyEngine';
+import { QuestEngine } from './QuestEngine';
 
 export interface QTimeStatus {
   isOverdue: boolean;
@@ -99,7 +105,8 @@ export class ProductionEngine {
     station: StationType,
     litSubStep?: LitSubStep,
     machine?: MachineData,
-    staff?: StaffData
+    staff?: StaffData,
+    pieStaff?: StaffData
   ): number {
     let baseSec = this.BASE_STATION_DURATION_SEC[station] || 10;
     if (station === 'LIT' && litSubStep) {
@@ -120,7 +127,15 @@ export class ProductionEngine {
       baseSec = Math.max(4, Math.round(baseSec * 0.85));
     }
 
-    return Math.max(4, Math.round(baseSec));
+    // 製程整合工程師 (PIE) 全製程提速加成 (加速 8% ~ 40%)
+    if (pieStaff) {
+      const pie = YieldEngine.getPieBonus(pieStaff);
+      if (pie.speedBonus > 0) {
+        baseSec = Math.max(3, Math.round(baseSec / (1 + pie.speedBonus)));
+      }
+    }
+
+    return Math.max(3, Math.round(baseSec));
   }
 
   /**
@@ -731,5 +746,137 @@ export class ProductionEngine {
         });
       }
     }
+  }
+
+  /**
+   * 離線生產快進模擬追趕演算法 (Offline Catch-Up Simulation)
+   * 當玩家關閉網頁一段時間再次打開時，精準推進在製晶圓站點加工、機台磨損、TPM 防護、訂單交付與出貨
+   */
+  public static simulateOfflineCatchUp(state: SaveGameV2, elapsedSec: number): {
+    simulatedSec: number;
+    lotsCompleted: number;
+    wafersDelivered: number;
+    revenueEarned: number;
+  } {
+    const simulatedSec = Math.min(14400, Math.max(0, elapsedSec)); // 上限 4 小時
+    if (simulatedSec < 2) {
+      return { simulatedSec: 0, lotsCompleted: 0, wafersDelivered: 0, revenueEarned: 0 };
+    }
+
+    let lotsCompletedCount = 0;
+    let wafersDeliveredCount = 0;
+    let revenueEarnedTotal = 0;
+
+    const staffMap = new Map<string, StaffData>(state.staff.map(s => [s.id, s]));
+
+    for (let step = 0; step < simulatedSec; step++) {
+      state.gameTime += 1;
+
+      // 1. 財務推進 (每 30 秒推進 1 次，精確計算水電與折舊)
+      if (step % 30 === 0) {
+        FinanceEngine.tickSimulation(state, 30);
+      }
+
+      // 2. 機台磨損與 TPM 維護 (每 10 秒檢查 1 次)
+      if (step % 10 === 0) {
+        for (const machine of state.machines) {
+          if (machine.status === 'EXPLODED') continue;
+          const engineer = machine.assignedEngineerId ? staffMap.get(machine.assignedEngineerId) : null;
+          const result = MaintenanceEngine.updateMachineHealth(machine, engineer, 10);
+          machine.wear = result.newWear;
+          if (result.breakdownOccurred) {
+            machine.status = result.isExploded ? 'EXPLODED' : 'MAINTENANCE';
+          }
+        }
+      }
+
+      // 3. 員工疲勞度動態更新
+      if (step % 10 === 0) {
+        for (const staff of state.staff) {
+          if (staff.workShift === 'OFF') {
+            staff.fatigue = Math.max(0, staff.fatigue - 2.5);
+          } else {
+            const baseRate = staff.shiftMode === 'TWO_SHIFT' ? 0.5 : 0.2;
+            const shiftMultiplier = staff.workShift === 'NIGHT' ? 1.5 : 1.0;
+            staff.fatigue = Math.min(100, staff.fatigue + baseRate * shiftMultiplier);
+          }
+        }
+      }
+
+      // 4. 推進 PROCESSING 狀態之在製晶圓批次 (跳過 QUEUED 等待啟動批次)
+      const completedOrders: OrderData[] = [];
+      for (const lot of state.activeLots) {
+        if (lot.status !== 'PROCESSING') continue;
+
+        const order = state.activeOrders.find(o => o.id === lot.orderId);
+        const pieStaff = order?.assignedPieId ? state.staff.find(s => s.id === order.assignedPieId) : undefined;
+
+        if (lot.stationProgressSeconds === undefined) {
+          lot.stationProgressSeconds = 0;
+        }
+        if (!lot.stationRequiredSeconds) {
+          lot.stationRequiredSeconds = this.getStationRequiredSeconds(lot.currentStation, lot.litSubStep, undefined, undefined, pieStaff);
+        }
+
+        lot.stationProgressSeconds += 1;
+
+        if (lot.stationProgressSeconds >= lot.stationRequiredSeconds) {
+          lot.stationProgressSeconds = 0;
+          const nodeNm = order ? order.nodeNm : 10000;
+
+          const adv = this.advanceLotStation(
+            lot,
+            state.unlockedFeatures.cmp,
+            nodeNm,
+            state.player.unlockedCleanroomClass,
+            state.gameTime,
+            state.machines,
+            state.facility.yellowRoomTiles
+          );
+
+          lot.stationRequiredSeconds = this.getStationRequiredSeconds(lot.currentStation, lot.litSubStep, undefined, undefined, pieStaff);
+
+          if (adv.isLotCompleted) {
+            lot.status = 'COMPLETED';
+            lotsCompletedCount++;
+            if (order) {
+              const lotsForOrder = state.activeLots.filter(l => l.orderId === order.id);
+              if (!lot.hasYellowRoomViolation && lot.yieldMultiplier !== 0.0) {
+                lot.yieldMultiplier = YieldEngine.calculateLotYield(lot, state, order);
+              }
+              const diesInLot = Math.round((order.totalDies / Math.max(1, lotsForOrder.length)) * lot.yieldMultiplier);
+              order.goodDiesDelivered = Math.min(order.totalDies, order.goodDiesDelivered + diesInLot);
+
+              const wafersInThisLot = diesInLot > 0 ? (lot.waferCount || 25) : 0;
+              wafersDeliveredCount += wafersInThisLot;
+              QuestEngine.onWaferDelivered(state.questState, wafersInThisLot);
+
+              const allLotsDone = lotsForOrder.every(l => l.status === 'COMPLETED');
+              if (allLotsDone && !completedOrders.includes(order)) {
+                order.status = 'COMPLETED';
+                order.deliveryYield = Number((order.goodDiesDelivered / order.totalDies).toFixed(3));
+                // 記錄交貨時的真實良率至近五筆滑動良率歷史
+                state.rollingYieldHistory.push(order.deliveryYield);
+                if (state.rollingYieldHistory.length > 5) {
+                  state.rollingYieldHistory.shift();
+                }
+                completedOrders.push(order);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 檢查市場訂單補齊與逾時更換
+    EconomyEngine.checkOrderReplenishment(state);
+    EconomyEngine.checkMarketOrdersExpiry(state);
+
+    return {
+      simulatedSec,
+      lotsCompleted: lotsCompletedCount,
+      wafersDelivered: wafersDeliveredCount,
+      revenueEarned: revenueEarnedTotal
+    };
   }
 }

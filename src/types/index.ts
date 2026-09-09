@@ -12,6 +12,8 @@ export type CleanroomPhase = 1 | 2 | 3 | 4;
 
 export type K1TechLevel = 'BASE' | 'CAR' | 'OPC' | 'PSM' | 'SAQP';
 
+export type StaffSpecialty = MachineCategory | 'PIE';
+
 export type StaffRank = 'Young Specialist' | 'Skilled Worker' | 'Senior Engineer' | 'Fellow';
 
 export type ShiftMode = 'TWO_SHIFT' | 'THREE_SHIFT';
@@ -20,9 +22,9 @@ export type WorkShift = 'DAY' | 'SWING' | 'NIGHT' | 'OFF';
 
 export type MachineStatus = 'IDLE' | 'PROCESSING' | 'MAINTENANCE' | 'EXPLODED';
 
-export type LotStatus = 'PROCESSING' | 'WAITING_QTIME' | 'TRANSPORTING' | 'SCRAPPED' | 'COMPLETED';
+export type LotStatus = 'QUEUED' | 'PROCESSING' | 'WAITING_QTIME' | 'TRANSPORTING' | 'SCRAPPED' | 'COMPLETED';
 
-export type OrderStatus = 'ACTIVE' | 'FULFILLED' | 'CANCELLED';
+export type OrderStatus = 'PENDING' | 'ACTIVE' | 'COMPLETED' | 'FULFILLED' | 'CANCELLED';
 
 export interface PlayerProfile {
   companyName: string;
@@ -72,7 +74,7 @@ export interface StaffData {
   id: string;
   name: string;
   rank: StaffRank;
-  moduleSpecialty: MachineCategory;
+  moduleSpecialty: StaffSpecialty;
   fatigue: number; // 0 ~ 100
   shiftMode: ShiftMode;
   workShift?: WorkShift; // 'DAY' | 'SWING' | 'NIGHT' | 'OFF'
@@ -102,6 +104,10 @@ export interface OrderData {
   layerAllocations?: LayerAllocation[];
   allowedDurationSec?: number;
   marketExpiresAt?: number;
+  assignedPieId?: string | null;
+  deliveryYield?: number;
+  expectedPayout?: number;
+  completedAtGameTime?: number;
 }
 
 export interface WaferLotData {

@@ -21,6 +21,7 @@ import { UserLoginModal } from './UserLoginModal';
 import { TechTreeModal } from './TechTreeModal';
 import { SaveGameService } from '../services/SaveGameService';
 import { SoundEffects } from '../audio/SoundEffects';
+import { YieldEngine } from '../engine/YieldEngine';
 import { OrderData, WaferLotData } from '../types';
 
 export class UIManager {
@@ -122,7 +123,62 @@ export class UIManager {
       return;
     }
 
-    const order = this.state.activeOrders[0];
+    const completedOrders = this.state.activeOrders.filter(o => o.status === 'COMPLETED');
+    const ongoingOrders = this.state.activeOrders.filter(o => o.status === 'ACTIVE' || o.status === 'PENDING');
+
+    // 情況 A：全部訂單皆已完工，顯示榮耀完工請款看板
+    if (completedOrders.length > 0 && ongoingOrders.length === 0) {
+      const firstComp = completedOrders[0];
+      const delivYield = firstComp.deliveryYield !== undefined 
+        ? firstComp.deliveryYield 
+        : (firstComp.goodDiesDelivered / Math.max(1, firstComp.totalDies));
+      const totalPayout = completedOrders.reduce((sum, o) => sum + (o.expectedPayout || 0), 0);
+
+      container.innerHTML = `
+        <div id="hud-order-status-bar" class="hud-order-bar order-completed cursor-pointer bg-gradient-to-r from-emerald-950/90 via-slate-900/90 to-cyan-950/90 border-2 border-emerald-500/60 shadow-xl shadow-emerald-500/20 animate-pulse">
+          <div class="flex items-center justify-between w-full flex-wrap gap-2">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center text-xl flex-shrink-0 text-emerald-300">
+                📦
+              </div>
+              <div>
+                <div class="text-sm font-bold text-emerald-300 flex items-center gap-2 flex-wrap">
+                  <span>🎉 【訂單完工交貨】客戶尾款待請領！</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-900 text-emerald-200 border border-emerald-400/40">
+                    ${firstComp.clientName} (${firstComp.nodeNm}nm)
+                  </span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-950 text-amber-300 border border-amber-500/40">
+                    🎯 交貨良率: ${(delivYield * 100).toFixed(1)}%
+                  </span>
+                  ${completedOrders.length > 1 ? `<span class="px-1.5 py-0.2 rounded text-[10px] font-mono bg-slate-800 text-slate-300">共 ${completedOrders.length} 筆完工</span>` : ''}
+                </div>
+                <div class="text-xs text-slate-300 mt-0.5">
+                  晶圓已加工檢驗完成並送抵客戶！請前往合約看板檢視代工資訊並點擊請領尾款。
+                </div>
+              </div>
+            </div>
+            <button id="btn-bar-action" class="btn-sci-fi text-xs font-bold py-2 px-4 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white shadow-lg shadow-emerald-500/30 flex-shrink-0">
+              💰 立即收款 NT$ ${totalPayout > 0 ? totalPayout.toLocaleString() : '請領尾款'}
+            </button>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('hud-order-status-bar')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        SoundEffects.playClick();
+        this.openContracts();
+      });
+      document.getElementById('btn-bar-action')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        SoundEffects.playClick();
+        this.openContracts();
+      });
+      return;
+    }
+
+    // 情況 B：存在進行中的訂單
+    const order = ongoingOrders[0] || this.state.activeOrders[0];
     const orderLots = this.state.activeLots.filter(l => l.orderId === order.id);
     const activeLot = orderLots.find(l => l.status === 'PROCESSING') || orderLots[0];
 
@@ -134,6 +190,10 @@ export class UIManager {
     const totalLayers = activeLot ? activeLot.totalLayers : (order.layerCount || 10);
     const currentStation = activeLot ? activeLot.currentStation : 'FILM';
     const currentSubStep = activeLot ? activeLot.litSubStep : undefined;
+
+    // PIE 工程師加成資訊
+    const pieStaff = order.assignedPieId ? this.state.staff.find(s => s.id === order.assignedPieId) : null;
+    const pieBonus = YieldEngine.getPieBonus(pieStaff);
 
     // 判定當前對應機台
     let targetCategory: string = currentStation;
@@ -179,8 +239,30 @@ export class UIManager {
 
     const isAllDone = order.goodDiesDelivered >= order.totalDies || (orderLots.length > 0 && orderLots.every(l => l.status === 'COMPLETED'));
 
+    // 完工待請款提示橫幅 (若有其他訂單已完工)
+    let completedBannerHtml = '';
+    if (completedOrders.length > 0) {
+      const comp0 = completedOrders[0];
+      const compYield = comp0.deliveryYield !== undefined ? comp0.deliveryYield : (comp0.goodDiesDelivered / Math.max(1, comp0.totalDies));
+      completedBannerHtml = `
+        <div id="btn-quick-payout-banner" class="flex items-center justify-between bg-emerald-950/70 border border-emerald-500/50 rounded-lg px-3 py-1 mb-2 text-xs text-emerald-300 animate-pulse hover:bg-emerald-900/80 cursor-pointer">
+          <span class="flex items-center gap-2 font-bold flex-wrap">
+            <span>🎉</span>
+            <span>【${comp0.clientName}】${completedOrders.length > 1 ? `等 ${completedOrders.length} 筆訂單` : '訂單'}已完工交貨！</span>
+            <span class="px-2 py-0.2 rounded text-[10px] font-mono bg-amber-950 text-amber-300 border border-amber-500/40">
+              🎯 良率: ${(compYield * 100).toFixed(1)}%
+            </span>
+          </span>
+          <span class="text-[11px] font-bold text-amber-300 flex items-center gap-1 hover:underline">
+            💰 前往請領尾款 ➔
+          </span>
+        </div>
+      `;
+    }
+
     container.innerHTML = `
       <div id="hud-order-status-bar" class="hud-order-bar cursor-pointer" title="點擊檢視訂單詳情與批次資訊">
+        ${completedBannerHtml}
         <!-- 上方：訂單資訊、良品產能、機台指派與動作按鈕 -->
         <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
           <div class="flex items-center gap-3">
@@ -202,6 +284,17 @@ export class UIManager {
                 <span>交付進度: <strong class="text-amber-300">${delivered} / ${total} 顆</strong> (${pct}%)</span>
                 <span class="text-slate-600">|</span>
                 <span>所在機台: <strong class="${currentMachine?.status === 'EXPLODED' ? 'text-red-400 font-bold animate-pulse' : 'text-cyan-300'}">📍 ${currentMachine ? currentMachine.name : '產線調度中'}</strong></span>
+                <span class="text-slate-600">|</span>
+                ${pieStaff ? `
+                  <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-indigo-950 text-indigo-300 border border-indigo-500/40 flex items-center gap-1" title="製程整合工程師 (PIE): ${pieStaff.name} (${pieStaff.rank})">
+                    👨‍💼 PIE: <strong>${pieStaff.name}</strong> 
+                    <span class="text-emerald-400 font-bold">${pieBonus.speedBonus > 0 ? `+${Math.round(pieBonus.speedBonus * 100)}%速` : ''} +${(pieBonus.yieldBonus * 100).toFixed(1)}%良率</span>
+                  </span>
+                ` : `
+                  <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-900 text-slate-400 border border-slate-700/60" title="尚未指派製程整合工程師，前往合約訂單可指派">
+                    👨‍💼 PIE: <span class="text-amber-400">未指派</span>
+                  </span>
+                `}
                 <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-900 border border-slate-700 text-cyan-300">
                   ⏱️ 站點進度: <strong>${activeLot ? (activeLot.stationProgressSeconds || 0) : 0}s</strong> / ${activeLot ? (activeLot.stationRequiredSeconds || 10) : 10}s
                 </span>
@@ -217,7 +310,11 @@ export class UIManager {
 
           <!-- 右側狀態與按鈕 -->
           <div class="flex items-center gap-2">
-            ${isAllDone ? `
+            ${completedOrders.length > 0 ? `
+              <button id="btn-bar-action" class="btn-sci-fi text-xs py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold animate-pulse shadow-md shadow-emerald-500/30">
+                💰 請領尾款 (${completedOrders.length})
+              </button>
+            ` : isAllDone ? `
               <button id="btn-bar-action" class="btn-sci-fi text-xs py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold animate-bounce shadow-md shadow-emerald-500/30">
                 📦 晶圓已完工！出貨結算
               </button>
@@ -288,6 +385,12 @@ export class UIManager {
     });
 
     document.getElementById('btn-bar-action')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      SoundEffects.playClick();
+      this.openContracts();
+    });
+
+    document.getElementById('btn-quick-payout-banner')?.addEventListener('click', (e) => {
       e.stopPropagation();
       SoundEffects.playClick();
       this.openContracts();

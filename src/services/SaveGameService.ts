@@ -151,6 +151,17 @@ export class SaveGameService {
           workShift: 'DAY',
           assignedMachineId: 'mach_litho_1',
           salary: 60_000
+        },
+        {
+          id: 'staff_2',
+          name: 'Sarah Chen',
+          rank: 'Skilled Worker',
+          moduleSpecialty: 'PIE',
+          fatigue: 5,
+          shiftMode: 'THREE_SHIFT',
+          workShift: 'DAY',
+          assignedMachineId: null,
+          salary: 75_000
         }
       ],
       activeOrders: [],
@@ -455,9 +466,25 @@ export class SaveGameService {
             ProductionEngine.updateMachineNames(parsed.machines);
           }
           if (parsed.rollingYieldHistory && parsed.rollingYieldHistory.length > 0) {
-            // 若先前的存檔歷史卡在全是 1.0 (受先前未結算良率 bug 影響)，重置為逼真動態良率
-            if (parsed.rollingYieldHistory.every((y: number) => y >= 0.999)) {
-              parsed.rollingYieldHistory = [0.918, 0.935, 0.902, 0.927, 0.921];
+            // 近五筆滑動良率依據交貨實況校準：若全是 0.88 以上且為 Tier 1，平滑校準至符合交貨實況（~58.8%）
+            if (parsed.rollingYieldHistory.every((y: number) => y >= 0.88) && (parsed.player?.foundryTier || 1) === 1) {
+              parsed.rollingYieldHistory = [0.560, 0.600, 0.580, 0.640, 0.560];
+            }
+          }
+          if (parsed.staff && Array.isArray(parsed.staff)) {
+            // 確保舊存檔中若尚未有專任 PIE，補充一位優秀製程整合工程師
+            if (!parsed.staff.some((s: StaffData) => s.moduleSpecialty === 'PIE')) {
+              parsed.staff.push({
+                id: 'staff_pie_1',
+                name: 'Sarah Chen',
+                rank: 'Skilled Worker',
+                moduleSpecialty: 'PIE',
+                fatigue: 5,
+                shiftMode: 'THREE_SHIFT',
+                workShift: 'DAY',
+                assignedMachineId: null,
+                salary: 75_000
+              });
             }
           }
           if (parsed.marketOrders) {

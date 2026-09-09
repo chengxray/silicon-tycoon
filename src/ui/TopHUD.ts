@@ -15,6 +15,7 @@ import { EconomyEngine } from '../engine/EconomyEngine';
 import { FinanceEngine } from '../engine/FinanceEngine';
 import { TechTreeEngine } from '../engine/TechTreeEngine';
 import { SoundEffects } from '../audio/SoundEffects';
+import { CashFXManager } from './CashFXManager';
 
 export interface TopHUDCallbacks {
   onOpenContracts: () => void;
@@ -40,6 +41,7 @@ export class TopHUD {
   private isInitialized = false;
   private isDropdownOpen = false;
   private currentState: SaveGameV2 | null = null;
+  private lastKnownCash: number | null = null;
 
   constructor(containerId: string, callbacks: TopHUDCallbacks) {
     const el = document.getElementById(containerId);
@@ -65,6 +67,7 @@ export class TopHUD {
   public rebuild(): void {
     this.isInitialized = false;
     this.isDropdownOpen = false;
+    this.lastKnownCash = null;
   }
 
   /**
@@ -492,7 +495,15 @@ export class TopHUD {
     const ceoEl = document.getElementById('hud-ceo-name');
     if (ceoEl) ceoEl.textContent = p.ceoName;
 
-    // 2. 現金
+    // 2. 現金變動與浮動特效
+    if (this.lastKnownCash !== null) {
+      const delta = Math.round(p.cash) - Math.round(this.lastKnownCash);
+      if (Math.abs(delta) >= 1) {
+        CashFXManager.trigger(delta);
+      }
+    }
+    this.lastKnownCash = p.cash;
+
     const cashEl = document.getElementById('hud-cash-value');
     if (cashEl) cashEl.textContent = `NT$ ${Math.round(p.cash).toLocaleString()}`;
 
