@@ -304,23 +304,23 @@ export class StoreModal {
     onUpdate: () => void
   ): void {
     const categories: { key: MachineCategory | 'FLEET' | 'AMHS' | 'FACILITY'; label: string; icon: string }[] = [
-      { key: 'LITHO', label: 'LITHO 微影機', icon: '🔦' },
-      { key: 'TRACK', label: 'TRACK 塗膠顯影 (瓶頸)', icon: '🌀' },
-      { key: 'FILM', label: 'FILM 薄膜成長', icon: '✨' },
-      { key: 'ETCH', label: 'ETCH 蝕刻製程', icon: '⚡' },
-      { key: 'DIFF', label: 'DIFF 擴散植入', icon: '🎯' },
-      { key: 'CMP', label: 'CMP 平坦研磨', icon: '💿' },
-      { key: 'AMHS', label: 'AMHS 運送設備', icon: '🚚' },
-      { key: 'FACILITY', label: '無塵廠房與潔淨度', icon: '🏛️' },
-      { key: 'FLEET', label: '廠內現役機台 (' + state.machines.length + ')', icon: '🏭' }
+      { key: 'LITHO', label: 'LITHO 微影曝光機', icon: '🔦' },
+      { key: 'TRACK', label: 'TRACK 塗膠顯影機', icon: '🌀' },
+      { key: 'FILM', label: 'FILM 薄膜成長機', icon: '✨' },
+      { key: 'ETCH', label: 'ETCH 電漿蝕刻機', icon: '⚡' },
+      { key: 'DIFF', label: 'DIFF 擴散與離子佈植', icon: '🎯' },
+      { key: 'CMP', label: 'CMP 化學機械平坦化', icon: '💿' },
+      { key: 'AMHS', label: 'AMHS 自動物料搬運', icon: '🚚' },
+      { key: 'FACILITY', label: '無塵廠房拓建與潔淨度', icon: '🏛️' },
+      { key: 'FLEET', label: '廠內現役機台資產', icon: '🏭' }
     ];
 
     container.innerHTML = `
       <div id="modal-backdrop-store" class="modal-backdrop">
-        <div class="modal-content glass-panel glass-panel-glow max-w-5xl max-h-[90vh] flex flex-col text-slate-100 p-0 overflow-hidden">
+        <div class="modal-content glass-panel glass-panel-glow max-w-6xl w-[94vw] h-[90vh] flex flex-col text-slate-100 p-0 overflow-hidden">
           
           <!-- Header -->
-          <div class="modal-header flex items-center justify-between px-6 py-4 border-b border-slate-700/80 bg-slate-900/80">
+          <div class="modal-header flex items-center justify-between px-6 py-3.5 border-b border-slate-700/80 bg-slate-900/90 flex-shrink-0">
             <div class="flex items-center gap-3">
               <div class="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-xl flex-shrink-0">
                 🏭
@@ -333,51 +333,98 @@ export class StoreModal {
                   </span>
                 </h3>
                 <p class="text-xs text-slate-400">
-                  購置先進製程設備，並聯 Track 消除微影瓶頸，升級天軌天車與無人自走車 (AMHS)！
+                  購置先進製程設備，並聯 Track 消除微影瓶頸，拓建無塵室與升級潔淨度等級！
                 </p>
               </div>
             </div>
 
-            <button id="btn-close-store" class="w-8 h-8 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center font-mono text-base transition-colors" title="關閉商城">
+            <button id="btn-close-store" class="w-8 h-8 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center font-mono text-base transition-colors cursor-pointer" title="關閉商城">
               ✕
             </button>
           </div>
 
-          <!-- Category Nav Tabs -->
-          <div class="flex border-b border-slate-700/60 bg-slate-900/40 px-6 pt-2 overflow-x-auto gap-1 flex-shrink-0">
-            ${categories.map(cat => {
-              const isActive = this.activeCategory === cat.key;
-              const isCmpLocked = cat.key === 'CMP' && !state.unlockedFeatures.cmp;
-              return `
-                <button
-                  class="btn-store-tab px-3.5 py-2 text-xs font-semibold border-b-2 whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                    isActive ? 'border-amber-400 text-amber-300' : 'border-transparent text-slate-400 hover:text-slate-200'
-                  } ${isCmpLocked ? 'opacity-50' : ''}"
-                  data-cat="${cat.key}"
-                >
-                  <span>${cat.icon}</span>
-                  <span>${cat.label}</span>
-                  ${isCmpLocked ? '<span class="text-[10px] text-amber-500 font-mono">(Tier 3解鎖)</span>' : ''}
-                </button>
-              `;
-            }).join('')}
-          </div>
+          <!-- Main Two-Column Layout: Left Vertical Sidebar + Right Content Panel -->
+          <div class="flex-1 flex min-h-0 overflow-hidden">
+            
+            <!-- Left Vertical Sidebar (直立式導航表單) -->
+            <div class="w-56 sm:w-64 bg-slate-950/90 border-r border-slate-800 flex flex-col flex-shrink-0 select-none">
+              <div class="px-4 py-3 border-b border-slate-800/80 flex items-center justify-between text-xs font-mono text-slate-400">
+                <span class="font-bold text-slate-300 tracking-wider">設備與廠務分類</span>
+                <span class="text-[10px] bg-slate-900 px-2 py-0.5 rounded text-cyan-400 border border-slate-800">9 大項目</span>
+              </div>
 
-          <!-- Body Content -->
-          <div class="modal-body p-6 overflow-y-auto flex-1 space-y-4">
-            ${this.activeCategory === 'FLEET'
-              ? this.renderFleetTab(state)
-              : (this.activeCategory === 'AMHS'
-                  ? this.renderAMHSTab(state)
-                  : (this.activeCategory === 'FACILITY'
-                      ? this.renderFacilityTab(state)
-                      : this.renderCatalogTab(state)))
-            }
+              <div class="p-2.5 overflow-y-auto flex-1 space-y-1.5">
+                ${categories.map(cat => {
+                  const isActive = this.activeCategory === cat.key;
+                  const isCmpLocked = cat.key === 'CMP' && !state.unlockedFeatures.cmp;
+                  
+                  let badgeHtml = '';
+                  if (cat.key === 'TRACK') {
+                    badgeHtml = '<span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-amber-950/80 text-amber-300 border border-amber-500/40 flex-shrink-0">瓶頸</span>';
+                  } else if (cat.key === 'CMP' && isCmpLocked) {
+                    badgeHtml = '<span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-800 text-slate-400 flex-shrink-0">T3解鎖</span>';
+                  } else if (cat.key === 'FACILITY') {
+                    badgeHtml = `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-indigo-950/80 text-indigo-300 border border-indigo-500/40 flex-shrink-0">P${state.facility.cleanroomPhase || 1}</span>`;
+                  } else if (cat.key === 'FLEET') {
+                    badgeHtml = `<span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 flex-shrink-0">${state.machines.length}</span>`;
+                  }
+
+                  return `
+                    <button
+                      class="btn-store-tab w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all flex items-center justify-between group cursor-pointer ${
+                        isActive
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm shadow-amber-500/20 font-bold'
+                          : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/80 border border-transparent'
+                      } ${isCmpLocked ? 'opacity-60' : ''}"
+                      data-cat="${cat.key}"
+                    >
+                      <div class="flex items-center gap-2.5 min-w-0 truncate mr-1">
+                        <span class="text-base flex-shrink-0">${cat.icon}</span>
+                        <span class="truncate">${cat.label}</span>
+                      </div>
+                      ${badgeHtml}
+                    </button>
+                  `;
+                }).join('')}
+              </div>
+
+              <!-- Sidebar Footer Summary -->
+              <div class="p-3 border-t border-slate-800/80 bg-slate-950/90 text-[11px] text-slate-400 font-mono space-y-1">
+                <div class="flex justify-between items-center">
+                  <span class="text-slate-500">現役機台:</span>
+                  <span class="text-slate-200 font-bold">${state.machines.length} 台</span>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-slate-500">無塵廠房:</span>
+                  <span class="text-cyan-400 font-bold">Phase ${state.facility.cleanroomPhase || 1} (${state.facility.bayGridSize?.width || 10}×${state.facility.bayGridSize?.height || 10})</span>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-slate-500">潔淨等級:</span>
+                  <span class="text-emerald-400 font-bold">${(state.player.unlockedCleanroomClass || 'Class 10,000').split(' (')[0]}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Body Content -->
+            <div class="modal-body p-6 overflow-y-auto flex-1 space-y-4 bg-slate-900/40">
+              ${this.activeCategory === 'FLEET'
+                ? this.renderFleetTab(state)
+                : (this.activeCategory === 'AMHS'
+                    ? this.renderAMHSTab(state)
+                    : (this.activeCategory === 'FACILITY'
+                        ? this.renderFacilityTab(state)
+                        : this.renderCatalogTab(state)))
+              }
+            </div>
+
           </div>
 
           <!-- Footer with Return Button -->
-          <div class="modal-footer p-3 border-t border-slate-700/80 bg-slate-900/90 flex items-center justify-end px-6">
-            <button id="btn-back-store" class="btn-sci-fi px-5 py-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 border-slate-600 text-white shadow-md">
+          <div class="modal-footer p-3 border-t border-slate-700/80 bg-slate-900/90 flex items-center justify-between px-6 flex-shrink-0">
+            <div class="text-xs text-slate-400 font-mono hidden sm:block">
+              💡 點選左側直立表單直達各站點採購、現役機台保養或無塵室拓建
+            </div>
+            <button id="btn-back-store" class="btn-sci-fi px-5 py-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 border-slate-600 text-white shadow-md ml-auto cursor-pointer">
               ◀ 返回無塵室 (Back to Cleanroom)
             </button>
           </div>
