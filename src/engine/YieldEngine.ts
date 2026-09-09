@@ -133,12 +133,12 @@ export class YieldEngine {
     // 1. 無塵室潔淨室等級基底單層良率 (Cleanroom Class Layer Yield)
     // Tier 1 (Class 10,000) 基準良率設計為 55% ~ 68%，避免早期良率虛高，體現半導體學習曲線
     let cleanroomLayerFactor = 0.915; // Class 10000 基準
-    const crClass = state.player.unlockedCleanroomClass;
-    if (crClass === 'Class 1000') cleanroomLayerFactor = 0.955;
-    else if (crClass === 'Class 100') cleanroomLayerFactor = 0.975;
-    else if (crClass === 'Class 10') cleanroomLayerFactor = 0.988;
-    else if (crClass === 'Class 1') cleanroomLayerFactor = 0.995;
-    else if (crClass === 'ISO 1') cleanroomLayerFactor = 0.9985;
+    const crClass = (state.player.unlockedCleanroomClass || '').replace(/,/g, '');
+    if (crClass.includes('ISO 1') || crClass === 'ISO 1') cleanroomLayerFactor = 0.9985;
+    else if (crClass.includes('Class 1') && !crClass.includes('10')) cleanroomLayerFactor = 0.995;
+    else if (crClass.includes('Class 10') && !crClass.includes('100')) cleanroomLayerFactor = 0.988;
+    else if (crClass.includes('Class 100') && !crClass.includes('1000')) cleanroomLayerFactor = 0.975;
+    else if (crClass.includes('Class 1000') && !crClass.includes('10000')) cleanroomLayerFactor = 0.955;
 
     // 2. 相關加工機台平均磨損折損 (Machine Wear Defect Loss)
     const activeMachines = state.machines.filter(m => m.status !== 'EXPLODED');

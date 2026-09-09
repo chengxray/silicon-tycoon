@@ -12,7 +12,8 @@ export class AdvisoryModal {
   public static show(
     state: SaveGameV2,
     onNavigateStore?: () => void,
-    onNavigateHR?: () => void
+    onNavigateHR?: () => void,
+    onNavigateYieldGuide?: () => void
   ): void {
     const container = document.getElementById('modal-container');
     if (!container) return;
@@ -173,6 +174,13 @@ export class AdvisoryModal {
                     </button>`
                   : ''
               }
+              ${
+                onNavigateYieldGuide
+                  ? `<button id="btn-advisory-yield-guide" class="btn-sci-fi bg-gradient-to-r from-amber-600 to-cyan-600 hover:from-amber-500 hover:to-cyan-500 font-bold px-3 py-1.5 text-xs text-white">
+                      💡 良率實戰挽救指南
+                    </button>`
+                  : ''
+              }
               <button id="btn-advisory-ok" class="btn-sci-fi px-4 py-1.5 text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700">
                 ◀ 返回無塵室
               </button>
@@ -200,6 +208,11 @@ export class AdvisoryModal {
     document.getElementById('btn-advisory-hr')?.addEventListener('click', () => {
       close();
       if (onNavigateHR) onNavigateHR();
+    });
+
+    document.getElementById('btn-advisory-yield-guide')?.addEventListener('click', () => {
+      close();
+      if (onNavigateYieldGuide) onNavigateYieldGuide();
     });
   }
 }

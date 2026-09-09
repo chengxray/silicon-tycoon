@@ -389,20 +389,38 @@ export class MachinePanel {
                 </div>
 
                 <select id="select-station-engineer" class="select-sci-fi w-full py-2 px-3 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs">
-                  <option value="">-- 未指派駐站工程師 (無調校加成，磨損正常累積) --</option>
-                  ${moduleEngineers.map(staff => `
-                    <option value="${staff.id}" ${machine.assignedEngineerId === staff.id ? 'selected' : ''}>
-                      ${staff.name} - ${staff.rank} [專長: ${staff.moduleSpecialty}] (疲勞: ${Math.round(staff.fatigue)}%)
-                    </option>
-                  `).join('')}
+                  <option value="">-- 未指派駐站工程師 (機台待命，無調校加成) --</option>
+                  ${moduleEngineers.map(staff => {
+                    const isStationedHere = machine.assignedEngineerId === staff.id;
+                    const isSpecialtyMatch = staff.moduleSpecialty === machine.category;
+                    const otherMachine = staff.assignedMachineId && staff.assignedMachineId !== machine.id
+                      ? state.machines.find(m => m.id === staff.assignedMachineId)
+                      : null;
+                    
+                    let statusPrefix = '🟢 [待命可進駐]';
+                    let statusSuffix = '';
+                    if (isStationedHere) {
+                      statusPrefix = '🔵 [目前駐站本機]';
+                    } else if (otherMachine) {
+                      statusPrefix = `🔄 [進駐於: ${otherMachine.name}]`;
+                      statusSuffix = ' ➔ 選取將交換崗位';
+                    }
+
+                    return `
+                      <option value="${staff.id}" ${isStationedHere ? 'selected' : ''}>
+                        ${statusPrefix} ${staff.name} - ${staff.rank} [${staff.moduleSpecialty}${isSpecialtyMatch ? ' ★專長吻合' : ''}] (疲勞: ${Math.round(staff.fatigue)}%)${statusSuffix}
+                      </option>
+                    `;
+                  }).join('')}
                 </select>
 
-                <div class="text-[11px] text-slate-400">
+                <div class="text-[11px] text-slate-400 flex items-center justify-between flex-wrap gap-1">
                   ${assignedStaff ? `
-                    <span>駐站人員：<strong class="text-slate-200">${assignedStaff.name}</strong> (專長: ${assignedStaff.moduleSpecialty} | 疲勞: <strong class="${assignedStaff.fatigue >= 80 ? 'text-red-400 font-bold' : 'text-emerald-400'}">${Math.round(assignedStaff.fatigue)}%</strong>)</span>
+                    <span>駐站人員：<strong class="text-slate-200">${assignedStaff.name}</strong> (${assignedStaff.rank} | 專長: ${assignedStaff.moduleSpecialty} | 疲勞: <strong class="${assignedStaff.fatigue >= 80 ? 'text-red-400 font-bold' : 'text-emerald-400'}">${Math.round(assignedStaff.fatigue)}%</strong>)</span>
                   ` : `
                     <span class="text-amber-400/80">💡 指派模組工程師駐站後，可啟動 TPM 零故障保護與執行精密 PM 預防保養！</span>
                   `}
+                  <span class="text-[10px] text-cyan-400/90 font-mono">支援選取已派員機台自動「交換崗位」</span>
                 </div>
               </div>
 
@@ -529,28 +547,41 @@ export class MachinePanel {
       });
     });
 
-    // 工程師更換指派
+    // 工程師更換指派 (支援真實雙向「交換崗位」機制)
     document.getElementById('select-station-engineer')?.addEventListener('change', (e) => {
       SoundEffects.playClick();
       const staffId = (e.target as HTMLSelectElement).value || null;
+      const currentStaff = machine.assignedEngineerId ? state.staff.find(s => s.id === machine.assignedEngineerId) : null;
 
-      // 解除原工程師指派
-      if (machine.assignedEngineerId) {
-        const oldStaff = state.staff.find(s => s.id === machine.assignedEngineerId);
-        if (oldStaff) oldStaff.assignedMachineId = null;
-      }
-
-      // 指派新工程師
-      machine.assignedEngineerId = staffId;
-      if (staffId) {
+      if (!staffId) {
+        // 取消駐站工程師
+        if (currentStaff) currentStaff.assignedMachineId = null;
+        machine.assignedEngineerId = null;
+      } else {
         const newStaff = state.staff.find(s => s.id === staffId);
         if (newStaff) {
-          // 若新工程師原先在其他機台，解綁其他機台
-          if (newStaff.assignedMachineId) {
-            const prevMachine = state.machines.find(m => m.id === newStaff.assignedMachineId);
-            if (prevMachine) prevMachine.assignedEngineerId = null;
+          const prevMachine = newStaff.assignedMachineId
+            ? state.machines.find(m => m.id === newStaff.assignedMachineId)
+            : null;
+
+          if (prevMachine && currentStaff && prevMachine.id !== machine.id) {
+            // 【真實雙向交換崗位 (Position Swap)】
+            // newStaff 轉駐當前 machine，原駐站 currentStaff 交換至 prevMachine
+            prevMachine.assignedEngineerId = currentStaff.id;
+            currentStaff.assignedMachineId = prevMachine.id;
+            machine.assignedEngineerId = newStaff.id;
+            newStaff.assignedMachineId = machine.id;
+          } else {
+            // 一般指派：若新工程師原本在其他機台，該機台變為空置
+            if (prevMachine) {
+              prevMachine.assignedEngineerId = null;
+            }
+            if (currentStaff) {
+              currentStaff.assignedMachineId = null;
+            }
+            machine.assignedEngineerId = newStaff.id;
+            newStaff.assignedMachineId = machine.id;
           }
-          newStaff.assignedMachineId = machine.id;
 
           // 指派工程師進駐巡檢維護 -> 推進每日任務
           QuestEngine.onMachineMaintained(state.questState);

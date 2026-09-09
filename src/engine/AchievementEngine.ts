@@ -136,10 +136,10 @@ export class AchievementEngine {
       claimed: false
     },
     {
-      id: 'rework_savior',
+      id: 'pie_guardian',
       category: 'yield',
-      title: '點石成金光阻重洗 (Rework Savior)',
-      description: '成功對 Q-Time 逾期晶圓執行光阻重洗 (Rework)，拯救昂貴晶片免於報廢。',
+      title: '製程整合守護神 (PIE Yield Guardian)',
+      description: '為在製訂單指派專任製程整合工程師 (PIE)，並成功交付出廠一批晶圓。',
       rewardCash: 500_000,
       unlocked: false,
       claimed: false
@@ -265,6 +265,11 @@ export class AchievementEngine {
     // 13. flawless_wafer
     if (save.rollingYieldHistory.some((y) => y >= 0.99)) {
       unlock('flawless_wafer');
+    }
+
+    // 14. pie_guardian (成功交付至少一批有 PIE 指派的訂單)
+    if (fulfilledOrders.some((o) => !!o.assignedPieId)) {
+      unlock('pie_guardian');
     }
 
     // 15. five_star_foundry

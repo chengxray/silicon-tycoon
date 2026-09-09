@@ -1033,6 +1033,7 @@ export class CleanroomScene extends Phaser.Scene {
       }
     } else {
       this.renderFloor();
+      this.renderOHTRails();
       this.renderMachines();
       if (this.saveGame.unlockedFeatures.agv && this.agvCarriers.length === 0) {
         this.spawnAGVCarriers();

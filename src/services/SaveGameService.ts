@@ -66,7 +66,7 @@ export class SaveGameService {
         agv: false,
         oht: false,
         shrOht: false,
-        mesAutoDispatch: false, // 完成新手教學後解鎖
+        mesAutoDispatch: true, // 預設即開啟全廠 MES 自動排產與機台派工
         mixAndMatchLitho: false
       },
       facility: {
@@ -517,6 +517,23 @@ export class SaveGameService {
           if (!parsed.marketCandidates || parsed.marketCandidates.length === 0) {
             parsed.marketCandidates = HREngine.generateMarketCandidates(parsed.player?.foundryTier || 1, 6);
             parsed.nextCandidateRespawnTime = 0;
+          }
+          if (!parsed.unlockedFeatures) {
+            parsed.unlockedFeatures = { cmp: false, agv: false, oht: false, shrOht: false, mesAutoDispatch: true, mixAndMatchLitho: false };
+          } else {
+            parsed.unlockedFeatures.mesAutoDispatch = true; // 預設常態開啟
+          }
+          // 確保成就清單同步最新項目，並移除已廢止的 rework_savior
+          const initialAchs = AchievementEngine.getInitialAchievements();
+          if (!parsed.achievements || !Array.isArray(parsed.achievements)) {
+            parsed.achievements = initialAchs;
+          } else {
+            parsed.achievements = parsed.achievements.filter((a: any) => a.id !== 'rework_savior');
+            for (const ach of initialAchs) {
+              if (!parsed.achievements.some((a: any) => a.id === ach.id)) {
+                parsed.achievements.push(ach);
+              }
+            }
           }
           return parsed as SaveGameV2;
         }

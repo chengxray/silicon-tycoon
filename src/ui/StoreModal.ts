@@ -14,6 +14,7 @@ import { ProductionEngine } from '../engine/ProductionEngine';
 import { FinanceEngine } from '../engine/FinanceEngine';
 import { TechTreeModal } from './TechTreeModal';
 import { SaveGameService } from '../services/SaveGameService';
+import { CashFXManager } from './CashFXManager';
 
 export interface StoreEquipmentItem {
   modelId: string;
@@ -29,7 +30,7 @@ export interface StoreEquipmentItem {
 }
 
 export class StoreModal {
-  private static activeCategory: MachineCategory | 'FLEET' | 'AMHS' = 'LITHO';
+  private static activeCategory: MachineCategory | 'FLEET' | 'AMHS' | 'FACILITY' = 'LITHO';
 
   // 完整半導體機台採購型錄
   public static readonly STORE_CATALOG: StoreEquipmentItem[] = [
@@ -286,9 +287,13 @@ export class StoreModal {
     }
   ];
 
-  public static show(state: SaveGameV2, onUpdate: () => void): void {
+  public static show(state: SaveGameV2, onUpdate: () => void, initialCategory?: MachineCategory | 'FLEET' | 'AMHS' | 'FACILITY'): void {
     const container = document.getElementById('modal-container');
     if (!container) return;
+
+    if (initialCategory) {
+      this.activeCategory = initialCategory;
+    }
 
     this.render(container, state, onUpdate);
   }
@@ -298,7 +303,7 @@ export class StoreModal {
     state: SaveGameV2,
     onUpdate: () => void
   ): void {
-    const categories: { key: MachineCategory | 'FLEET' | 'AMHS'; label: string; icon: string }[] = [
+    const categories: { key: MachineCategory | 'FLEET' | 'AMHS' | 'FACILITY'; label: string; icon: string }[] = [
       { key: 'LITHO', label: 'LITHO 微影機', icon: '🔦' },
       { key: 'TRACK', label: 'TRACK 塗膠顯影 (瓶頸)', icon: '🌀' },
       { key: 'FILM', label: 'FILM 薄膜成長', icon: '✨' },
@@ -306,6 +311,7 @@ export class StoreModal {
       { key: 'DIFF', label: 'DIFF 擴散植入', icon: '🎯' },
       { key: 'CMP', label: 'CMP 平坦研磨', icon: '💿' },
       { key: 'AMHS', label: 'AMHS 運送設備', icon: '🚚' },
+      { key: 'FACILITY', label: '無塵廠房與潔淨度', icon: '🏛️' },
       { key: 'FLEET', label: '廠內現役機台 (' + state.machines.length + ')', icon: '🏭' }
     ];
 
@@ -363,7 +369,9 @@ export class StoreModal {
               ? this.renderFleetTab(state)
               : (this.activeCategory === 'AMHS'
                   ? this.renderAMHSTab(state)
-                  : this.renderCatalogTab(state))
+                  : (this.activeCategory === 'FACILITY'
+                      ? this.renderFacilityTab(state)
+                      : this.renderCatalogTab(state)))
             }
           </div>
 
@@ -528,6 +536,413 @@ export class StoreModal {
             </div>
           `;
         }).join('')}
+      </div>
+    `;
+  }
+
+  private static renderFacilityTab(state: SaveGameV2): string {
+    const currentPhase = state.facility.cleanroomPhase || 1;
+    const currentGrid = state.facility.bayGridSize || { width: 10, height: 10 };
+    const currentArea = currentGrid.width * currentGrid.height;
+    const currentClassRaw = state.player.unlockedCleanroomClass || 'Class 10000';
+    const currentClassNorm = currentClassRaw.replace(/,/g, '');
+
+    const phaseConfigs = [
+      {
+        phase: 1,
+        name: 'Phase 1: 模組起步廠房 (Pilot Fab)',
+        width: 10,
+        height: 10,
+        area: 100,
+        price: 0,
+        tier: 1,
+        icon: '🏭',
+        desc: '標準 10×10 (100 格) 基礎無塵室空間。具備核心機台進駐廊道，適合 3µm ~ 350nm 早期製程。',
+        benefits: ['100 格基盤面積', '標準黃光隔離區', '基礎環形天軌迴路']
+      },
+      {
+        phase: 2,
+        name: 'Phase 2: 規模量產廠房 (Volume Fab)',
+        width: 14,
+        height: 14,
+        area: 196,
+        price: 5_000_000,
+        tier: 1,
+        icon: '🏗️',
+        desc: '拓建為 14×14 (196 格，擴增 +96 格)。舒緩機台走道壅塞，容納多台並聯 Track 與薄膜機台。',
+        benefits: ['196 格寬敞廠房 (+96 格)', '可容納並聯 Track 機群', 'AMHS 自走車通行效率大增']
+      },
+      {
+        phase: 3,
+        name: 'Phase 3: 先進製程晶圓巨廠 (MegaFab)',
+        width: 18,
+        height: 18,
+        area: 324,
+        price: 15_000_000,
+        tier: 2,
+        icon: '🏢',
+        desc: '擴展為 18×18 (324 格，擴增 +128 格)。支援多層金屬佈線、浸潤式微影與 CMP 平坦化專案產線。',
+        benefits: ['324 格巨無霸廠房 (+128 格)', '支援大陣列 CMP 研磨機群', '全面支援 OHT 天車懸吊高速天軌']
+      },
+      {
+        phase: 4,
+        name: 'Phase 4: 巨型超級晶圓廠 (GigaFab)',
+        width: 24,
+        height: 24,
+        area: 576,
+        price: 40_000_000,
+        tier: 3,
+        icon: '🏛️',
+        desc: '究極 24×24 (576 格，擴增 +252 格) 全球旗艦級半導體巨型廠 (GigaFab)！可容納整套 High-NA EUV 極紫外光微影旗艦機隊！',
+        benefits: ['576 格超級旗艦廠房 (+252 格)', '🏆 解鎖【GigaFab 巨型潔淨室擴建】成就 (+NT$ 2,000,000)', '無上限自由機台佈局空間']
+      }
+    ];
+
+    const classConfigs = [
+      {
+        id: 'Class 10000',
+        name: 'Class 10,000 (ISO 7) 工業級無塵室',
+        dustDensity: '<= 10,000 顆 / ft³',
+        layerFactorVal: 0.915,
+        layerFactor: '91.5%',
+        est6Layer: '~57.5%',
+        price: 0,
+        tier: 1,
+        desc: '半導體入門等級，每立方英尺允許 10,000 顆 >=0.5µm 微塵。微塵容易落在晶圓表面形成針孔與短路缺陷。',
+        science: '美國聯邦標準 FED-STD-209E。微米早期製程尚可耐受，但多層加工累積良率較低。'
+      },
+      {
+        id: 'Class 1000',
+        name: 'Class 1,000 (ISO 6) 現代量產無塵室',
+        dustDensity: '<= 1,000 顆 / ft³',
+        layerFactorVal: 0.955,
+        layerFactor: '95.5%',
+        est6Layer: '~75.8%',
+        price: 8_000_000,
+        tier: 1,
+        desc: '落塵量驟降 90%！物理單層良率大幅飆升至 95.5%，直接逆轉 6 層以上晶圓多層良率雪崩惡夢！',
+        science: '加裝高效 HEPA 濾網與強化無塵送風天花板，顯著隔絕人員走動與設備摩擦產生的浮游微粒。'
+      },
+      {
+        id: 'Class 100',
+        name: 'Class 100 (ISO 5) 黃光專區無塵室',
+        dustDensity: '<= 100 顆 / ft³',
+        layerFactorVal: 0.975,
+        layerFactor: '97.5%',
+        est6Layer: '~85.9%',
+        price: 25_000_000,
+        tier: 2,
+        desc: '先進微影黃光區標配環境，落塵控制在 100 顆以下。單層良率達 97.5%，六層累積良率突破 85%！',
+        science: '採用全天花板垂直層流 (Laminar Flow)，新鮮潔淨氣流以固定風速向下吹送，微塵瞬即被帶入高架地板排氣孔。'
+      },
+      {
+        id: 'Class 10',
+        name: 'Class 10 (ISO 4) 奈米級無塵微環境',
+        dustDensity: '<= 10 顆 / ft³',
+        layerFactorVal: 0.988,
+        layerFactor: '98.8%',
+        est6Layer: '~93.0%',
+        price: 60_000_000,
+        tier: 3,
+        desc: '嚴格控管落塵於 10 顆以下，關鍵尺寸 (CD) 與極薄閘極氧化層獲得金鐘罩級防護，單層良率 98.8%！',
+        science: 'ULPA 超高效空氣過濾器搭配化學氣體過濾器 (AMC Filter)，除微塵外更全面過濾酸鹼揮發性分子。'
+      },
+      {
+        id: 'Class 1',
+        name: 'Class 1 (ISO 3) 極致潔淨室',
+        dustDensity: '<= 1 顆 / ft³',
+        layerFactorVal: 0.995,
+        layerFactor: '99.5%',
+        est6Layer: '~97.0%',
+        price: 150_000_000,
+        tier: 3,
+        desc: '每立方英尺僅容許 1 顆微塵！接近外太空真空純淨度，全流程多層累積良率直逼 97%！',
+        science: '微影與蝕刻機台完全隔離於 mini-environment 局部微環境，人員不直接接觸晶圓，全部由自動化機械手臂傳輸。'
+      },
+      {
+        id: 'ISO 1',
+        name: 'ISO 1 (究極超純無塵室)',
+        dustDensity: '<= 0.1 顆 / ft³',
+        layerFactorVal: 0.9985,
+        layerFactor: '99.85%',
+        est6Layer: '~99.1%',
+        price: 400_000_000,
+        tier: 3,
+        desc: '半導體物理極限潔淨殿堂！搭配全自動氮氣置換 FOUP 密閉晶圓盒，神級黃金良率 99%+ (Flawless Wafer) 必備利器！',
+        science: 'ISO 14644-1 最高極限標準，以雷射粒子計數器幾近量測不到任何大於 0.1µm 顆粒，為埃米世代提供終極防護。'
+      }
+    ];
+
+    const currentClassIdx = classConfigs.findIndex(c => currentClassNorm.includes(c.id.replace(/,/g, '')));
+    const activeClassIdx = currentClassIdx >= 0 ? currentClassIdx : 0;
+    const activeClassConfig = classConfigs[activeClassIdx];
+
+    return `
+      <!-- Overview Status Banner -->
+      <div class="p-4 rounded-xl bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-indigo-500/40 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-xl bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center text-2xl flex-shrink-0">
+              🏛️
+            </div>
+            <div>
+              <h4 class="text-sm font-bold text-white flex items-center gap-2">
+                <span>無塵廠房規模與潔淨度管理中心</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                  Phase ${currentPhase} / Tier ${state.player.foundryTier}
+                </span>
+              </h4>
+              <p class="text-xs text-slate-400 mt-0.5">
+                拓建廠房空間擴充機台進駐容量；升級潔淨度等級從根本消除落塵，大幅拉升晶圓多層良率！
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-3 font-mono text-xs">
+            <div class="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800 text-center">
+              <div class="text-[10px] text-slate-400">當前廠房面積</div>
+              <div class="font-bold text-cyan-300">${currentGrid.width}×${currentGrid.height} (${currentArea} 格)</div>
+            </div>
+            <div class="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800 text-center">
+              <div class="text-[10px] text-slate-400">當前無塵室等級</div>
+              <div class="font-bold text-emerald-400">${activeClassConfig.name.split(' (')[0]}</div>
+            </div>
+            <div class="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800 text-center">
+              <div class="text-[10px] text-slate-400">單層良率係數</div>
+              <div class="font-bold text-amber-400">${activeClassConfig.layerFactor}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 1: 無塵廠房拓建 (Phase 1 ~ Phase 4) -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+          <h4 class="font-bold text-white text-sm flex items-center gap-2">
+            <span>🏗️</span>
+            <span>無塵室廠房拓建 (Phase Expansion)</span>
+          </h4>
+          <span class="text-xs text-slate-400 font-mono">擴大無塵室地磚與機台放置空間</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          ${phaseConfigs.map(item => {
+            const isCurrent = item.phase === currentPhase;
+            const isCompleted = item.phase < currentPhase;
+            const isNext = item.phase === currentPhase + 1;
+            const isTierUnlocked = state.player.foundryTier >= item.tier;
+            const canAfford = state.player.cash >= item.price;
+
+            let cardBorder = 'border-slate-800 bg-slate-900/70';
+            if (isCurrent) {
+              cardBorder = 'border-cyan-500/60 bg-cyan-950/20';
+            } else if (isNext) {
+              cardBorder = 'border-indigo-500/50 bg-indigo-950/10 hover:border-indigo-400/80';
+            }
+
+            return `
+              <div class="p-4 rounded-xl border ${cardBorder} transition-all flex flex-col justify-between space-y-3">
+                <div class="space-y-2">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="flex items-center gap-2.5">
+                      <div class="w-9 h-9 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center text-lg flex-shrink-0">
+                        ${item.icon}
+                      </div>
+                      <div>
+                        <h5 class="font-bold text-white text-sm">${item.name}</h5>
+                        <div class="text-[10px] font-mono text-cyan-400">
+                          尺寸: ${item.width}×${item.height} 格 | 總面積: ${item.area} 格 (${item.area > 100 ? `+${item.area - 100} 格` : '基礎'})
+                        </div>
+                      </div>
+                    </div>
+
+                    ${isCurrent ? `
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                        🔵 目前廠房
+                      </span>
+                    ` : (isCompleted ? `
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-slate-800 text-slate-400">
+                        ✔️ 已拓展
+                      </span>
+                    ` : `
+                      <span class="px-2 py-0.5 rounded text-[10px] font-mono ${isTierUnlocked ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-slate-800 text-slate-400'}">
+                        Tier ${item.tier}+
+                      </span>
+                    `)}
+                  </div>
+
+                  <p class="text-[11px] text-slate-300 leading-relaxed">
+                    ${item.desc}
+                  </p>
+
+                  <div class="flex flex-wrap gap-1.5 pt-1">
+                    ${item.benefits.map(b => `
+                      <span class="px-2 py-0.5 rounded bg-slate-950/80 border border-slate-800 text-[10px] text-slate-300">
+                        ${b}
+                      </span>
+                    `).join('')}
+                  </div>
+                </div>
+
+                <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+                  <div class="font-mono">
+                    <span class="text-[10px] text-slate-400">擴建投資：</span>
+                    <strong class="text-amber-400 text-xs">${item.price === 0 ? '免費 (起步)' : `NT$ ${item.price.toLocaleString()}`}</strong>
+                  </div>
+
+                  ${isCurrent ? `
+                    <button disabled class="py-1.5 px-3 rounded-lg bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 text-xs font-bold font-mono cursor-default">
+                      ✔️ 現役廠房規模
+                    </button>
+                  ` : (isCompleted ? `
+                    <button disabled class="py-1.5 px-3 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-400 text-xs font-mono cursor-default">
+                      已由更高等級取代
+                    </button>
+                  ` : (!isTierUnlocked ? `
+                    <button class="btn-open-techtree-from-store py-1.5 px-3 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:text-cyan-300 text-xs cursor-pointer">
+                      🔒 需晉升至 Tier ${item.tier}
+                    </button>
+                  ` : (!isNext ? `
+                    <button disabled class="py-1.5 px-3 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-500 text-xs cursor-not-allowed">
+                      🔒 需先完成 Phase ${item.phase - 1}
+                    </button>
+                  ` : `
+                    <button
+                      class="btn-upgrade-facility-phase btn-sci-fi px-4 py-1.5 text-xs font-bold cursor-pointer ${canAfford ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-600/20' : 'opacity-50 cursor-not-allowed bg-slate-800'}"
+                      data-phase="${item.phase}"
+                      data-price="${item.price}"
+                      data-width="${item.width}"
+                      data-height="${item.height}"
+                      ${!canAfford ? 'disabled' : ''}
+                    >
+                      <span>🏗️ 立即擴建廠房</span>
+                    </button>
+                  `)))}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- Section 2: 無塵室潔淨度等級升級 (Class 10,000 -> ISO 1) -->
+      <div class="space-y-3 pt-4 border-t border-slate-800">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+          <div>
+            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+              <span>🔬</span>
+              <span>無塵室潔淨度等級升級 (Cleanroom Cleanliness Class)</span>
+            </h4>
+            <span class="text-[11px] text-slate-400">過濾空氣落塵粒子，提供單層良率金鐘罩 (直接拉升多層晶圓累積良率)</span>
+          </div>
+          <span class="text-xs font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded">
+            解決「良率過低」核心神器
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          ${classConfigs.map((item, idx) => {
+            const isCurrent = idx === activeClassIdx;
+            const isCompleted = idx < activeClassIdx;
+            const isNext = idx === activeClassIdx + 1;
+            const isTierUnlocked = state.player.foundryTier >= item.tier;
+            const canAfford = state.player.cash >= item.price;
+
+            let cardBorder = 'border-slate-800 bg-slate-900/70';
+            if (isCurrent) {
+              cardBorder = 'border-emerald-500/60 bg-emerald-950/20';
+            } else if (isNext) {
+              cardBorder = 'border-amber-500/50 bg-amber-950/10 hover:border-amber-400/80';
+            }
+
+            return `
+              <div class="p-3.5 rounded-xl border ${cardBorder} transition-all flex flex-col justify-between space-y-3">
+                <div class="space-y-2">
+                  <div class="flex items-start justify-between gap-1.5">
+                    <div>
+                      <h5 class="font-bold text-white text-xs">${item.name}</h5>
+                      <div class="text-[10px] font-mono text-emerald-400 mt-0.5">
+                        單層良率: <strong class="text-white">${item.layerFactor}</strong> | 6層預估: <strong class="text-cyan-300">${item.est6Layer}</strong>
+                      </div>
+                    </div>
+
+                    ${isCurrent ? `
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex-shrink-0">
+                        🟢 當前等級
+                      </span>
+                    ` : (isCompleted ? `
+                      <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-400 flex-shrink-0">
+                        ✔️ 已超越
+                      </span>
+                    ` : `
+                      <span class="px-1.5 py-0.5 rounded text-[10px] font-mono ${isTierUnlocked ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-slate-800 text-slate-400'} flex-shrink-0">
+                        Tier ${item.tier}+
+                      </span>
+                    `)}
+                  </div>
+
+                  <div class="p-2 rounded bg-slate-950/80 border border-slate-800/80 text-[10px] font-mono text-slate-400 space-y-0.5">
+                    <div class="flex justify-between">
+                      <span>落塵容許密度:</span>
+                      <span class="text-cyan-300 font-bold">${item.dustDensity}</span>
+                    </div>
+                  </div>
+
+                  <p class="text-[11px] text-slate-300 leading-relaxed">
+                    ${item.desc}
+                  </p>
+                </div>
+
+                <div class="space-y-2 pt-2 border-t border-slate-800/80">
+                  <div class="flex items-center justify-between text-xs font-mono">
+                    <span class="text-[10px] text-slate-400">升級費用:</span>
+                    <strong class="text-amber-400">${item.price === 0 ? '初始免費' : `NT$ ${item.price.toLocaleString()}`}</strong>
+                  </div>
+
+                  <div class="flex items-center gap-2">
+                    <button
+                      class="btn-cleanroom-info btn-sci-fi py-1.5 px-2.5 text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-1 cursor-pointer flex-shrink-0"
+                      data-title="${item.name}"
+                      data-note="${item.science}"
+                      title="查看無塵室潔淨原理"
+                    >
+                      <span>ℹ️</span>
+                      <span>原理</span>
+                    </button>
+
+                    ${isCurrent ? `
+                      <button disabled class="flex-1 py-1.5 px-2 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-xs font-bold font-mono cursor-default text-center">
+                        ✔️ 現役潔淨規格
+                      </button>
+                    ` : (isCompleted ? `
+                      <button disabled class="flex-1 py-1.5 px-2 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-400 text-xs font-mono cursor-default text-center">
+                        已超越此等級
+                      </button>
+                    ` : (!isTierUnlocked ? `
+                      <button class="btn-open-techtree-from-store flex-1 py-1.5 px-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:text-cyan-300 text-xs cursor-pointer text-center">
+                        🔒 需晉升 Tier ${item.tier}
+                      </button>
+                    ` : (!isNext ? `
+                      <button disabled class="flex-1 py-1.5 px-2 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-500 text-xs cursor-not-allowed text-center">
+                        🔒 需先達成前一級
+                      </button>
+                    ` : `
+                      <button
+                        class="btn-upgrade-cleanroom-class flex-1 btn-sci-fi justify-center py-1.5 text-xs font-bold cursor-pointer ${canAfford ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20' : 'opacity-50 cursor-not-allowed bg-slate-800'}"
+                        data-class-id="${item.id}"
+                        data-price="${item.price}"
+                        data-name="${item.name}"
+                        ${!canAfford ? 'disabled' : ''}
+                      >
+                        <span>✨ 立即升級潔淨等級</span>
+                      </button>
+                    `)))}
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
       </div>
     `;
   }
@@ -919,6 +1334,78 @@ export class StoreModal {
 
         onUpdate();
         this.render(container, state, onUpdate);
+      });
+    });
+
+    // 拓建無塵室廠房規模
+    container.querySelectorAll('.btn-upgrade-facility-phase').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const phase = parseInt((e.currentTarget as HTMLElement).getAttribute('data-phase') || '1', 10);
+        const price = parseInt((e.currentTarget as HTMLElement).getAttribute('data-price') || '0', 10);
+        const width = parseInt((e.currentTarget as HTMLElement).getAttribute('data-width') || '10', 10);
+        const height = parseInt((e.currentTarget as HTMLElement).getAttribute('data-height') || '10', 10);
+
+        if (state.player.cash < price) {
+          alert('流動資金不足，無法進行無塵室廠房擴建！');
+          return;
+        }
+
+        if (!confirm(`確定要投資 NT$ ${price.toLocaleString()} 擴建無塵室廠房至 Phase ${phase} (${width}×${height} 格) 嗎？`)) {
+          return;
+        }
+
+        state.player.cash -= price;
+        FinanceEngine.recordCapEx(state, price);
+        state.facility.cleanroomPhase = phase as any;
+        state.facility.bayGridSize = { width, height };
+
+        CashFXManager.trigger(-price);
+        SoundEffects.playFanfare();
+        AchievementEngine.checkAchievements(state);
+        SaveGameService.saveToLocalStorage(state);
+
+        onUpdate();
+        this.render(container, state, onUpdate);
+      });
+    });
+
+    // 升級無塵室潔淨度等級
+    container.querySelectorAll('.btn-upgrade-cleanroom-class').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const classId = (e.currentTarget as HTMLElement).getAttribute('data-class-id') || 'Class 10000';
+        const price = parseInt((e.currentTarget as HTMLElement).getAttribute('data-price') || '0', 10);
+        const name = (e.currentTarget as HTMLElement).getAttribute('data-name') || '';
+
+        if (state.player.cash < price) {
+          alert('流動資金不足，無法升級無塵室潔淨度等級！');
+          return;
+        }
+
+        if (!confirm(`確定要投資 NT$ ${price.toLocaleString()} 升級無塵室潔淨等級至【${name}】嗎？`)) {
+          return;
+        }
+
+        state.player.cash -= price;
+        FinanceEngine.recordCapEx(state, price);
+        state.player.unlockedCleanroomClass = classId;
+
+        CashFXManager.trigger(-price);
+        SoundEffects.playFanfare();
+        AchievementEngine.checkAchievements(state);
+        SaveGameService.saveToLocalStorage(state);
+
+        onUpdate();
+        this.render(container, state, onUpdate);
+      });
+    });
+
+    // 無塵室潔淨原理科普
+    container.querySelectorAll('.btn-cleanroom-info').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        SoundEffects.playClick();
+        const note = (e.currentTarget as HTMLElement).getAttribute('data-note') || '';
+        const title = (e.currentTarget as HTMLElement).getAttribute('data-title') || '';
+        alert(`🔬 無塵室物理原理科普：【${title}】\n\n${note}`);
       });
     });
   }

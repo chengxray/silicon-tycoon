@@ -19,6 +19,7 @@ import { TutorialOverlay } from './TutorialOverlay';
 import { FinancialReportModal } from './FinancialReportModal';
 import { UserLoginModal } from './UserLoginModal';
 import { TechTreeModal } from './TechTreeModal';
+import { YieldGuideModal } from './YieldGuideModal';
 import { SaveGameService } from '../services/SaveGameService';
 import { SoundEffects } from '../audio/SoundEffects';
 import { YieldEngine } from '../engine/YieldEngine';
@@ -54,7 +55,6 @@ export class UIManager {
       onOpenQuests: () => this.openQuests(),
       onOpenAchievements: () => this.openAchievements(),
       onOpenAdvisory: () => this.openAdvisory(),
-      onToggleMES: (_enabled) => this.onStateUpdated(),
       onOpenSaveModal: () => this.openSaveModal(),
       onOpenWaferMap: () => this.openWaferMap(),
       onOpenTutorial: () => this.openTutorial(),
@@ -556,11 +556,11 @@ export class UIManager {
     });
   }
 
-  public openStore(): void {
+  public openStore(initialCategory?: any): void {
     StoreModal.show(this.state, () => {
       this.render();
       this.onStateUpdated();
-    });
+    }, initialCategory);
   }
 
   public openHR(): void {
@@ -585,10 +585,20 @@ export class UIManager {
   }
 
   public openAdvisory(): void {
-    AdvisoryModal.show(this.state, () => {
-      this.openStore();
-    }, () => {
-      this.openHR();
+    AdvisoryModal.show(
+      this.state,
+      () => this.openStore(),
+      () => this.openHR(),
+      () => this.openYieldGuide()
+    );
+  }
+
+  public openYieldGuide(): void {
+    YieldGuideModal.show(this.state, {
+      onOpenPlanner: () => this.togglePlannerMode(true),
+      onOpenContracts: () => this.openContracts(),
+      onOpenHR: () => this.openHR(),
+      onOpenStore: (cat) => this.openStore(cat)
     });
   }
 
@@ -596,6 +606,11 @@ export class UIManager {
     WaferMapModal.show(this.state, lot, () => {
       this.render();
       this.onStateUpdated();
+    }, {
+      onOpenPlanner: () => this.togglePlannerMode(true),
+      onOpenContracts: () => this.openContracts(),
+      onOpenHR: () => this.openHR(),
+      onOpenStore: (cat) => this.openStore(cat)
     });
   }
 

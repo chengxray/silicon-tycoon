@@ -9,20 +9,24 @@
 import { SaveGameV2, WaferLotData } from '../types';
 import { YieldEngine, DieResult } from '../engine/YieldEngine';
 import { SoundEffects } from '../audio/SoundEffects';
+import { YieldGuideModal, YieldGuideCallbacks } from './YieldGuideModal';
 
 export class WaferMapModal {
   private static dies: DieResult[] = [];
   private static selectedDie: DieResult | null = null;
   private static currentLot: WaferLotData | null = null;
+  private static callbacks?: YieldGuideCallbacks;
 
   public static show(
     state: SaveGameV2,
     lot?: WaferLotData | null,
-    onUpdate?: () => void
+    onUpdate?: () => void,
+    callbacks?: YieldGuideCallbacks
   ): void {
     const container = document.getElementById('modal-container');
     if (!container) return;
 
+    this.callbacks = callbacks;
     this.currentLot = lot || (state.activeLots.length > 0 ? state.activeLots[0] : null);
 
     // 計算基礎良率 (若無指定批次，取目前滑動良率或 92%)
@@ -259,6 +263,12 @@ export class WaferMapModal {
                 </div>
               </div>
 
+              <!-- Yield Troubleshooting Action Guide Button -->
+              <button id="btn-open-yield-guide" class="btn-sci-fi w-full justify-center py-2 px-3 text-xs font-bold bg-gradient-to-r from-amber-600 to-cyan-600 hover:from-amber-500 hover:to-cyan-500 text-white shadow-lg shadow-amber-900/40 flex items-center gap-2 animate-pulse cursor-pointer">
+                <span>💡</span>
+                <span>晶圓良率太低？開啟實戰挽救指南 (7 大真實解法)</span>
+              </button>
+
               <!-- Re-simulate Button -->
               <button id="btn-resim-wafer" class="btn-sci-fi w-full justify-center py-2 text-xs">
                 🔄 重新執行蒙地卡羅良率掃描
@@ -333,6 +343,12 @@ export class WaferMapModal {
       this.dies = YieldEngine.generateWaferMap(baseYield);
       this.selectedDie = this.dies[12] || this.dies[0];
       this.render(container, state, onUpdate);
+    });
+
+    // 開啟良率實戰挽救指南
+    document.getElementById('btn-open-yield-guide')?.addEventListener('click', () => {
+      SoundEffects.playClick();
+      YieldGuideModal.show(state, this.callbacks);
     });
   }
 }

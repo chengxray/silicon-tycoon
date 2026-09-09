@@ -24,7 +24,6 @@ export interface TopHUDCallbacks {
   onOpenQuests: () => void;
   onOpenAchievements: () => void;
   onOpenAdvisory: () => void;
-  onToggleMES: (enabled: boolean) => void;
   onOpenSaveModal: () => void;
   onOpenWaferMap?: () => void;
   onOpenTutorial?: () => void;
@@ -258,15 +257,6 @@ export class TopHUD {
               <span id="dropdown-achievements-badge"></span>
             </button>
 
-            <!-- MES 自動派工開關 -->
-            <button id="menu-item-toggle-mes" class="w-full px-4 py-2.5 text-left hover:bg-slate-800/90 rounded-xl flex items-center justify-between transition-colors cursor-pointer group mx-auto">
-              <span class="flex items-center gap-3 font-semibold text-slate-200 group-hover:text-white">
-                <span class="text-lg">🤖</span>
-                <span class="text-sm">MES 自動派工</span>
-              </span>
-              <span id="dropdown-mes-status" class="text-xs font-bold font-mono px-2 py-0.5 rounded">⚪ 已停用</span>
-            </button>
-
             <div class="h-px bg-slate-800/80 my-1.5 mx-3"></div>
 
             <!-- 切換玩家存檔 -->
@@ -423,16 +413,6 @@ export class TopHUD {
       this.closeDropdown();
       SoundEffects.playClick();
       this.callbacks.onOpenAchievements();
-    });
-
-    document.getElementById('menu-item-toggle-mes')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      SoundEffects.playClick();
-      if (!this.currentState) return;
-      const next = !this.currentState.unlockedFeatures.mesAutoDispatch;
-      this.currentState.unlockedFeatures.mesAutoDispatch = next;
-      this.callbacks.onToggleMES(next);
-      this.updateValues(this.currentState);
     });
 
     document.getElementById('menu-item-switch-user')?.addEventListener('click', (e) => {
@@ -614,16 +594,6 @@ export class TopHUD {
       achBadgeEl.innerHTML = hasUnclaimedAchievements
         ? '<span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-xs border border-emerald-500/30">可解鎖</span>'
         : '';
-    }
-
-    const mesStatusEl = document.getElementById('dropdown-mes-status');
-    if (mesStatusEl) {
-      mesStatusEl.textContent = state.unlockedFeatures.mesAutoDispatch ? '🟢 已開啟' : '⚪ 已停用';
-      mesStatusEl.className = `text-xs font-bold font-mono px-2 py-0.5 rounded ${
-        state.unlockedFeatures.mesAutoDispatch
-          ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40'
-          : 'bg-slate-900 text-slate-400 border border-slate-700'
-      }`;
     }
 
     const soundIconEl = document.getElementById('dropdown-sound-icon');

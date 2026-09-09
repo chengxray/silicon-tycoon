@@ -459,8 +459,23 @@ export class ContractModal {
                         return pieStaffList.map(s => {
                           const b = YieldEngine.getPieBonus(s);
                           const isSel = order.assignedPieId === s.id;
+                          const otherOrder = state.activeOrders.find(o => 
+                            o.id !== order.id && 
+                            (o.status === 'ACTIVE' || o.status === 'PENDING') && 
+                            o.assignedPieId === s.id
+                          );
+
+                          let statusPrefix = '🟢 [待命專派]';
+                          let statusSuffix = '';
+                          if (isSel) {
+                            statusPrefix = '🔵 [專責本單]';
+                          } else if (otherOrder) {
+                            statusPrefix = `🔄 [忙碌中: ${otherOrder.clientName}]`;
+                            statusSuffix = ' ➔ 選取將調派至此單';
+                          }
+
                           return `<option value="${s.id}" ${isSel ? 'selected' : ''}>
-                            ${s.name} (${s.rank}) [+${Math.round(b.speedBonus * 100)}%速 / +${(b.yieldBonus * 100).toFixed(1)}%良]
+                            ${statusPrefix} ${s.name} (${s.rank}) [+${Math.round(b.speedBonus * 100)}%速 / +${(b.yieldBonus * 100).toFixed(1)}%良]${statusSuffix}
                           </option>`;
                         }).join('');
                       })()}
@@ -707,9 +722,14 @@ export class ContractModal {
         order.deadlineGameTime = state.gameTime + allowedDuration;
         order.status = 'PENDING';
 
-        // 自動指派廠內專任 PIE 工程師 (若有)
-        const defaultPie = state.staff.find(s => s.moduleSpecialty === 'PIE' && s.workShift !== 'OFF') 
-          || state.staff.find(s => s.moduleSpecialty === 'PIE');
+        // 自動指派廠內「空閒」專任 PIE 工程師 (若有，嚴格遵循一 PIE 不可同時跨單原則)
+        const busyPieIds = new Set(
+          state.activeOrders
+            .filter(o => (o.status === 'ACTIVE' || o.status === 'PENDING') && o.assignedPieId)
+            .map(o => o.assignedPieId)
+        );
+        const defaultPie = state.staff.find(s => s.moduleSpecialty === 'PIE' && !busyPieIds.has(s.id) && s.workShift !== 'OFF') 
+          || state.staff.find(s => s.moduleSpecialty === 'PIE' && !busyPieIds.has(s.id));
         if (defaultPie) {
           order.assignedPieId = defaultPie.id;
         } else {
@@ -770,16 +790,60 @@ export class ContractModal {
       });
     });
 
-    // PIE 工程師下拉選單指派
+    // PIE 工程師下拉選單指派 (遵循 1 位 PIE 同時僅能負責 1 筆在製/待命訂單，支援調派與交換)
     container.querySelectorAll('.select-order-pie').forEach(sel => {
       sel.addEventListener('change', (e) => {
         const target = e.currentTarget as HTMLSelectElement;
         const orderId = target.getAttribute('data-order-id');
-        const staffId = target.value;
+        const staffId = target.value || null;
         const order = state.activeOrders.find(o => o.id === orderId);
         if (!order) return;
+
+        const prevPieId = order.assignedPieId;
+
+        if (staffId) {
+          // 若其他在製/待命訂單已由該 PIE 負責，執行調派 (若本單已有 PIE 則進行交換)
+          const otherOrder = state.activeOrders.find(o =>
+            o.id !== orderId &&
+            (o.status === 'ACTIVE' || o.status === 'PENDING') &&
+            o.assignedPieId === staffId
+          );
+          if (otherOrder) {
+            otherOrder.assignedPieId = prevPieId || null;
+            // 重新計算 otherOrder 批次的站點所需時間
+            const otherPieStaff = otherOrder.assignedPieId ? state.staff.find(s => s.id === otherOrder.assignedPieId) : undefined;
+            for (const lot of state.activeLots) {
+              if (lot.orderId === otherOrder.id && lot.status === 'PROCESSING') {
+                lot.stationRequiredSeconds = ProductionEngine.getStationRequiredSeconds(
+                  lot.currentStation,
+                  lot.litSubStep,
+                  undefined,
+                  undefined,
+                  otherPieStaff
+                );
+              }
+            }
+          }
+        }
+
         order.assignedPieId = staffId || null;
+
+        // 重新計算此訂單批次的站點所需時間
+        const curPieStaff = order.assignedPieId ? state.staff.find(s => s.id === order.assignedPieId) : undefined;
+        for (const lot of state.activeLots) {
+          if (lot.orderId === order.id && lot.status === 'PROCESSING') {
+            lot.stationRequiredSeconds = ProductionEngine.getStationRequiredSeconds(
+              lot.currentStation,
+              lot.litSubStep,
+              undefined,
+              undefined,
+              curPieStaff
+            );
+          }
+        }
+
         SoundEffects.playClick();
+        AchievementEngine.checkAchievements(state);
         SaveGameService.saveToLocalStorage(state);
         onUpdate();
         this.render(container, state, onUpdate);

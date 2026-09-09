@@ -14,6 +14,8 @@ import { AchievementEngine } from '../engine/AchievementEngine';
 import { MaintenanceEngine } from '../engine/MaintenanceEngine';
 import { FinanceEngine } from '../engine/FinanceEngine';
 import { HREngine } from '../engine/HREngine';
+import { QuestEngine } from '../engine/QuestEngine';
+import { SaveGameService } from '../services/SaveGameService';
 import { CashFXManager } from './CashFXManager';
 
 export class HRModal {
@@ -581,14 +583,31 @@ export class HRModal {
                       </div>
                     `
                     : `
-                      <label class="text-[10px] text-slate-400">進駐機台指派 (模組維護調校):</label>
+                      <label class="text-[10px] text-slate-400 flex items-center justify-between">
+                        <span>進駐機台指派 (模組維護調校):</span>
+                        <span class="text-[10px] text-cyan-400/90 font-mono">支援交換崗位</span>
+                      </label>
                       <select class="select-machine select-sci-fi text-xs py-1.5 px-2.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-200" data-staff-id="${staff.id}">
                         <option value="">-- 未指派機台 (待命/休假) --</option>
                         ${state.machines.map(m => {
                           const isSpecialtyMatch = m.category === staff.moduleSpecialty;
+                          const isCurrentlyAssigned = staff.assignedMachineId === m.id;
+                          const otherStaff = m.assignedEngineerId && m.assignedEngineerId !== staff.id
+                            ? state.staff.find(s => s.id === m.assignedEngineerId)
+                            : null;
+
+                          let statusPrefix = '🟢 [機台空置]';
+                          let statusSuffix = '';
+                          if (isCurrentlyAssigned) {
+                            statusPrefix = '🔵 [目前進駐]';
+                          } else if (otherStaff) {
+                            statusPrefix = `🔄 [已由 ${otherStaff.name} 進駐]`;
+                            statusSuffix = ' ➔ 選取將交換崗位';
+                          }
+
                           return `
-                            <option value="${m.id}" ${staff.assignedMachineId === m.id ? 'selected' : ''}>
-                              ${m.name} (${m.category} Tier ${m.tier}) ${isSpecialtyMatch ? '★專長相符' : ''}
+                            <option value="${m.id}" ${isCurrentlyAssigned ? 'selected' : ''}>
+                              ${statusPrefix} ${m.name} (${m.category} T${m.tier}) ${isSpecialtyMatch ? '★專長吻合' : ''}${statusSuffix}
                             </option>
                           `;
                         }).join('')}
@@ -967,7 +986,7 @@ export class HRModal {
       });
     });
 
-    // 指派機台下拉 (僅模組工程師)
+    // 指派機台下拉 (僅模組工程師，支援雙向「交換崗位」)
     container.querySelectorAll('.select-machine').forEach(sel => {
       sel.addEventListener('change', (e) => {
         const staffId = (e.currentTarget as HTMLElement).getAttribute('data-staff-id');
@@ -975,26 +994,40 @@ export class HRModal {
         const staff = state.staff.find(s => s.id === staffId);
         if (!staff) return;
 
-        // 若該機台已指派其他員工，先行解綁
-        if (machineId) {
-          const oldStaff = state.staff.find(s => s.assignedMachineId === machineId && s.id !== staffId);
-          if (oldStaff) oldStaff.assignedMachineId = null;
-        }
+        const prevMachineId = staff.assignedMachineId;
+        const prevMachine = prevMachineId ? state.machines.find(m => m.id === prevMachineId) : null;
 
-        // 更新新指派
-        staff.assignedMachineId = machineId;
-        
-        // 同步更新機台上的 assignedEngineerId
-        state.machines.forEach(m => {
-          if (m.id === machineId) {
-            m.assignedEngineerId = staff.id;
-          } else if (m.assignedEngineerId === staff.id) {
-            m.assignedEngineerId = null;
+        if (!machineId) {
+          // 取消指派
+          staff.assignedMachineId = null;
+          if (prevMachine && prevMachine.assignedEngineerId === staff.id) {
+            prevMachine.assignedEngineerId = null;
           }
-        });
+        } else {
+          const targetMachine = state.machines.find(m => m.id === machineId);
+          if (targetMachine) {
+            const oldStaff = state.staff.find(s => s.assignedMachineId === machineId && s.id !== staffId);
+            if (oldStaff && prevMachine && prevMachine.id !== targetMachine.id) {
+              // 雙向交換崗位：原駐站 oldStaff 交換至 staff 原本的 prevMachine
+              oldStaff.assignedMachineId = prevMachine.id;
+              prevMachine.assignedEngineerId = oldStaff.id;
+            } else if (oldStaff) {
+              // 若 staff 原本沒有進駐機台，oldStaff 變為待命
+              oldStaff.assignedMachineId = null;
+            } else if (prevMachine && prevMachine.id !== targetMachine.id) {
+              // 若 targetMachine 原本無人，清空 prevMachine 原指派
+              prevMachine.assignedEngineerId = null;
+            }
+
+            staff.assignedMachineId = targetMachine.id;
+            targetMachine.assignedEngineerId = staff.id;
+            QuestEngine.onMachineMaintained(state.questState);
+          }
+        }
 
         SoundEffects.playClick();
         AchievementEngine.checkAchievements(state);
+        SaveGameService.saveToLocalStorage(state);
         onUpdate();
         this.render(container, state, onUpdate);
       });
