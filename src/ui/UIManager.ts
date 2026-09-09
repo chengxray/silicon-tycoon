@@ -32,6 +32,7 @@ export class UIManager {
   private onTogglePlanner?: (active: boolean, tool?: 'PAINT_YELLOW' | 'PAINT_WHITE' | 'MOVE_MACHINE' | 'NONE') => void;
   public isPlannerActive = false;
   public currentPlannerTool: 'PAINT_YELLOW' | 'PAINT_WHITE' | 'MOVE_MACHINE' | 'NONE' = 'MOVE_MACHINE';
+  private focusedOrderIndex: number = 0;
 
   constructor(
     state: SaveGameV2,
@@ -178,7 +179,10 @@ export class UIManager {
     }
 
     // 情況 B：存在進行中的訂單
-    const order = ongoingOrders[0] || this.state.activeOrders[0];
+    if (this.focusedOrderIndex >= ongoingOrders.length) {
+      this.focusedOrderIndex = Math.max(0, ongoingOrders.length - 1);
+    }
+    const order = ongoingOrders[this.focusedOrderIndex] || this.state.activeOrders[0];
     const orderLots = this.state.activeLots.filter(l => l.orderId === order.id);
     const activeLot = orderLots.find(l => l.status === 'PROCESSING') || orderLots[0];
 
@@ -239,6 +243,42 @@ export class UIManager {
 
     const isAllDone = order.goodDiesDelivered >= order.totalDies || (orderLots.length > 0 && orderLots.every(l => l.status === 'COMPLETED'));
 
+    // 多筆訂單切換列 (當在製訂單 > 1 時提供上方切換按鈕組與翻頁箭頭)
+    let multiOrderSwitcherHtml = '';
+    if (ongoingOrders.length > 1) {
+      multiOrderSwitcherHtml = `
+        <div class="flex items-center justify-between bg-slate-950/90 border-b border-slate-800/80 px-3 py-1.5 gap-2 rounded-t-lg -mt-1 mb-2">
+          <div class="flex items-center gap-1.5 overflow-x-auto py-0.5">
+            <span class="text-[11px] font-bold text-slate-400 flex items-center gap-1 flex-shrink-0">
+              <span>📑 在製訂單切換:</span>
+            </span>
+            ${ongoingOrders.map((ord, idx) => `
+              <button 
+                class="btn-switch-hud-order px-2.5 py-1 rounded text-xs font-mono font-bold transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${
+                  idx === this.focusedOrderIndex 
+                    ? 'bg-cyan-600 text-white shadow-md shadow-cyan-500/30 border border-cyan-400' 
+                    : 'bg-slate-900/90 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-700/80'
+                }"
+                data-order-index="${idx}"
+                title="切換檢視【${ord.clientName}】(${ord.nodeNm}nm) 產線進度"
+              >
+                <span>${idx + 1}. ${ord.clientName}</span>
+                <span class="text-[10px] opacity-80 font-normal">(${ord.nodeNm}nm)</span>
+                <span class="text-[10px] px-1 py-0.2 rounded bg-black/40 ${ord.status === 'ACTIVE' ? 'text-emerald-300' : 'text-amber-300'}">
+                  ${ord.status === 'ACTIVE' ? '⚡投產' : '⏳待產'}
+                </span>
+              </button>
+            `).join('')}
+          </div>
+          <div class="flex items-center gap-1 flex-shrink-0">
+            <button id="btn-prev-hud-order" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono cursor-pointer" title="切換上一筆訂單">◀</button>
+            <span class="text-[11px] font-mono text-cyan-300 px-1 font-bold">${this.focusedOrderIndex + 1} / ${ongoingOrders.length}</span>
+            <button id="btn-next-hud-order" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono cursor-pointer" title="切換下一筆訂單">▶</button>
+          </div>
+        </div>
+      `;
+    }
+
     // 完工待請款提示橫幅 (若有其他訂單已完工)
     let completedBannerHtml = '';
     if (completedOrders.length > 0) {
@@ -263,6 +303,7 @@ export class UIManager {
     container.innerHTML = `
       <div id="hud-order-status-bar" class="hud-order-bar cursor-pointer" title="點擊檢視訂單詳情與批次資訊">
         ${completedBannerHtml}
+        ${multiOrderSwitcherHtml}
         <!-- 上方：訂單資訊、良品產能、機台指派與動作按鈕 -->
         <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
           <div class="flex items-center gap-3">
@@ -377,6 +418,31 @@ export class UIManager {
         </div>
       </div>
     `;
+
+    // 多筆在製訂單切換按鈕事件綁定
+    container.querySelectorAll('.btn-switch-hud-order').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt((e.currentTarget as HTMLElement).getAttribute('data-order-index') || '0', 10);
+        this.focusedOrderIndex = idx;
+        SoundEffects.playClick();
+        this.renderOrderStatusWidget();
+      });
+    });
+
+    document.getElementById('btn-prev-hud-order')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.focusedOrderIndex = (this.focusedOrderIndex - 1 + ongoingOrders.length) % ongoingOrders.length;
+      SoundEffects.playClick();
+      this.renderOrderStatusWidget();
+    });
+
+    document.getElementById('btn-next-hud-order')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.focusedOrderIndex = (this.focusedOrderIndex + 1) % ongoingOrders.length;
+      SoundEffects.playClick();
+      this.renderOrderStatusWidget();
+    });
 
     document.getElementById('hud-order-status-bar')?.addEventListener('click', (e) => {
       e.stopPropagation();

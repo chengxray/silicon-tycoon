@@ -17,6 +17,7 @@ import { AchievementEngine } from '../engine/AchievementEngine';
 import { ProductionEngine } from '../engine/ProductionEngine';
 import { FinanceEngine } from '../engine/FinanceEngine';
 import { EconomyEngine } from '../engine/EconomyEngine';
+import { HREngine } from '../engine/HREngine';
 
 export interface OfflineReport {
   offlineDurationSeconds: number;
@@ -147,7 +148,7 @@ export class SaveGameService {
           rank: 'Skilled Worker',
           moduleSpecialty: 'LITHO',
           fatigue: 10,
-          shiftMode: 'THREE_SHIFT',
+          shiftMode: 'WEEKEND_REST',
           workShift: 'DAY',
           assignedMachineId: 'mach_litho_1',
           salary: 60_000
@@ -158,7 +159,7 @@ export class SaveGameService {
           rank: 'Skilled Worker',
           moduleSpecialty: 'PIE',
           fatigue: 5,
-          shiftMode: 'THREE_SHIFT',
+          shiftMode: 'WEEKEND_REST',
           workShift: 'DAY',
           assignedMachineId: null,
           salary: 75_000
@@ -180,7 +181,9 @@ export class SaveGameService {
       gameTime: 0,
       financialState: FinanceEngine.initFinancialState(50_000_000, 70_000_000),
       marketOrders: EconomyEngine.generateContractBoard(1, null, 0),
-      nextOrderRespawnTime: 0
+      nextOrderRespawnTime: 0,
+      marketCandidates: HREngine.generateMarketCandidates(1, 6),
+      nextCandidateRespawnTime: 0
     };
 
     ProductionEngine.updateMachineNames(defaultSave.machines);
@@ -511,6 +514,10 @@ export class SaveGameService {
             }
           }
           EconomyEngine.ensureMarketOrders(parsed as SaveGameV2);
+          if (!parsed.marketCandidates || parsed.marketCandidates.length === 0) {
+            parsed.marketCandidates = HREngine.generateMarketCandidates(parsed.player?.foundryTier || 1, 6);
+            parsed.nextCandidateRespawnTime = 0;
+          }
           return parsed as SaveGameV2;
         }
       }
@@ -632,7 +639,9 @@ export class SaveGameService {
         weeklyClaimed: false
       },
       achievements: AchievementEngine.getInitialAchievements(),
-      gameTime: v1.gameTime ?? 0
+      gameTime: v1.gameTime ?? 0,
+      marketCandidates: HREngine.generateMarketCandidates(v1.player.foundryTier, 6),
+      nextCandidateRespawnTime: 0
     };
   }
 

@@ -229,6 +229,20 @@ export class FinanceEngine {
   }
 
   /**
+   * 記錄人資福利、帶薪休假或獵人頭支出
+   */
+  public static recordLaborCost(state: SaveGameV2, amount: number): void {
+    const fin = this.ensureFinancialState(state);
+    fin.today.expenses.payroll += amount;
+    fin.thisWeek.expenses.payroll += amount;
+    fin.thisMonth.expenses.payroll += amount;
+    fin.allTimeExpenses += amount;
+    this.updateRecordTotals(fin.today, state);
+    this.updateRecordTotals(fin.thisWeek, state);
+    this.updateRecordTotals(fin.thisMonth, state);
+  }
+
+  /**
    * 記錄晶圓報廢或重洗損失
    */
   public static recordScrapLoss(state: SaveGameV2, amount: number): void {

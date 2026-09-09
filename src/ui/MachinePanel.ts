@@ -18,6 +18,7 @@ import { StoreModal } from './StoreModal';
 import { QuestEngine } from '../engine/QuestEngine';
 import { AchievementEngine } from '../engine/AchievementEngine';
 import { SaveGameService } from '../services/SaveGameService';
+import { CashFXManager } from './CashFXManager';
 
 export class MachinePanel {
   public static show(
@@ -45,8 +46,14 @@ export class MachinePanel {
     const resellPrice = spec ? Math.round(spec.price * 0.40) : 800_000;
     const wearInt = Math.round(machine.wear);
 
-    // 取得進駐工程師
-    const assignedStaff = state.staff.find(s => s.id === machine.assignedEngineerId);
+    // 嚴格分離：機台只能進駐模組/設備工程師，PIE 專責全廠訂單整合
+    let assignedStaff = state.staff.find(s => s.id === machine.assignedEngineerId);
+    if (assignedStaff && assignedStaff.moduleSpecialty === 'PIE') {
+      machine.assignedEngineerId = null;
+      assignedStaff = undefined;
+    }
+    const moduleEngineers = state.staff.filter(s => s.moduleSpecialty !== 'PIE');
+
     let isTPMActive = false;
     let isExplosionRisk = false;
 
@@ -229,43 +236,6 @@ export class MachinePanel {
               `}
             </div>
 
-            <!-- 3. Wear & Health Bar -->
-            <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
-              <div class="flex items-center justify-between font-mono">
-                <span class="text-slate-400 flex items-center gap-1.5">
-                  <span>🛠️</span>
-                  <span>機台磨損與在線健康度</span>
-                </span>
-                <span class="font-bold ${wearInt > 70 ? 'text-red-400' : (wearInt > 40 ? 'text-amber-400' : 'text-emerald-400')}">
-                  磨損: ${wearInt}% (健康度 ${100 - wearInt}%)
-                </span>
-              </div>
-              <div class="w-full h-2.5 rounded-full bg-slate-950 overflow-hidden border border-slate-800">
-                <div class="h-full transition-all duration-300 ${wearInt > 70 ? 'bg-red-500' : (wearInt > 40 ? 'bg-amber-500' : 'bg-emerald-500')}" style="width: ${wearInt}%;"></div>
-              </div>
-
-              <!-- Status Alert Badges -->
-              ${isTPMActive ? `
-                <div class="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center gap-2">
-                  <span class="text-base">🛡️</span>
-                  <div>
-                    <span class="font-bold">TPM 24H 零故障在線維護中：</span>
-                    工程師在線微調，磨損鎖死在 5% 以下，故障率保證為 0%！
-                  </div>
-                </div>
-              ` : ''}
-
-              ${isExplosionRisk ? `
-                <div class="p-2 rounded-lg bg-red-950/40 border border-red-600/50 text-red-300 flex items-center gap-2 animate-pulse">
-                  <span class="text-base">💥</span>
-                  <div>
-                    <span class="font-bold">越級操作極度危險！</span>
-                    工程師職等落後機台 2 級以上，每次投片皆有 25% 炸機破壞風險！
-                  </div>
-                </div>
-              ` : ''}
-            </div>
-
             <!-- 4. Litho Specific Optical Rayleigh Details -->
             ${isLitho && k1Report ? `
               <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
@@ -352,66 +322,147 @@ export class MachinePanel {
               </div>
             ` : ''}
 
-            <!-- 6. Station Engineer Assignment -->
-            <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2.5">
-              <div class="flex items-center justify-between">
-                <span class="font-bold text-white flex items-center gap-1.5">
-                  <span>🧑‍🔬</span>
-                  <span>駐機製程工程師配置</span>
-                </span>
-                ${assignedStaff ? `
-                  <span class="text-[10px] font-mono text-purple-300">
-                    ${assignedStaff.rank} (${assignedStaff.moduleSpecialty})
+            <!-- 6. 整合看板：機台運轉監控與駐站工程師配置 (含雙軌維護機制) -->
+            <div class="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3.5">
+              <!-- 設備磨損與健康狀態 -->
+              <div>
+                <div class="flex items-center justify-between font-mono pb-1.5">
+                  <span class="text-white font-bold flex items-center gap-1.5 text-xs">
+                    <span>🛠️</span>
+                    <span>機台磨損度與在線健康狀態</span>
                   </span>
-                ` : '<span class="text-[10px] text-slate-500">無工程師</span>'}
+                  <span class="font-bold ${wearInt > 70 ? 'text-red-400' : (wearInt > 40 ? 'text-amber-400' : 'text-emerald-400')}">
+                    磨損: ${wearInt}% (健康度 ${100 - wearInt}%)
+                  </span>
+                </div>
+                <div class="w-full h-2.5 rounded-full bg-slate-950 overflow-hidden border border-slate-800">
+                  <div class="h-full transition-all duration-300 ${wearInt > 70 ? 'bg-red-500' : (wearInt > 40 ? 'bg-amber-500' : 'bg-emerald-500')}" style="width: ${wearInt}%;"></div>
+                </div>
+
+                <!-- Status Badges -->
+                <div class="mt-2 space-y-1">
+                  ${isTPMActive ? `
+                    <div class="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center gap-2 text-[11px]">
+                      <span class="text-sm">🛡️</span>
+                      <div>
+                        <span class="font-bold">TPM 24H 零故障在線維護中：</span>
+                        駐站工程師在線微調，磨損鎖死在 5% 以下，故障率保證為 0%！
+                      </div>
+                    </div>
+                  ` : ''}
+                  ${machine.hasPmTuneUpBonus ? `
+                    <div class="p-2 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 flex items-center gap-2 text-[11px]">
+                      <span class="text-sm">✨</span>
+                      <div>
+                        <span class="font-bold">腔體精密調校完畢：</span>
+                        下一輪加工晶圓批次享有 +3.0% 良率加成！
+                      </div>
+                    </div>
+                  ` : ''}
+                  ${isExplosionRisk ? `
+                    <div class="p-2 rounded-lg bg-red-950/40 border border-red-600/50 text-red-300 flex items-center gap-2 animate-pulse text-[11px]">
+                      <span class="text-sm">💥</span>
+                      <div>
+                        <span class="font-bold">越級操作極度危險！</span>
+                        工程師職等落後機台 2 級以上，每次投片皆有 25% 炸機破壞風險！
+                      </div>
+                    </div>
+                  ` : ''}
+                </div>
               </div>
 
-              <select id="select-station-engineer" class="select-sci-fi w-full py-2 px-3 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs">
-                <option value="">-- 未指派 (無調校加成，磨損正常累積) --</option>
-                ${state.staff.map(staff => `
-                  <option value="${staff.id}" ${machine.assignedEngineerId === staff.id ? 'selected' : ''}>
-                    ${staff.name} - ${staff.rank} [專長: ${staff.moduleSpecialty}] (疲勞: ${Math.round(staff.fatigue)}%)
-                  </option>
-                `).join('')}
-              </select>
+              <!-- 駐站模組工程師配置 (嚴格排除 PIE) -->
+              <div class="pt-2 border-t border-slate-800/80 space-y-2">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold text-white text-xs flex items-center gap-1">
+                      <span>🧑‍🔬</span>
+                      <span>駐站模組工程師配置</span>
+                    </span>
+                    <span class="text-[10px] text-slate-500">(PIE 專責全廠訂單整合，不進駐機台)</span>
+                  </div>
+                  ${assignedStaff ? `
+                    <span class="text-[10px] font-mono text-purple-300">
+                      ${assignedStaff.rank} (${assignedStaff.moduleSpecialty})
+                    </span>
+                  ` : '<span class="text-[10px] text-slate-500">無駐站人員</span>'}
+                </div>
 
-              <!-- 工程師日常巡檢維護功能 -->
-              <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                <select id="select-station-engineer" class="select-sci-fi w-full py-2 px-3 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs">
+                  <option value="">-- 未指派駐站工程師 (無調校加成，磨損正常累積) --</option>
+                  ${moduleEngineers.map(staff => `
+                    <option value="${staff.id}" ${machine.assignedEngineerId === staff.id ? 'selected' : ''}>
+                      ${staff.name} - ${staff.rank} [專長: ${staff.moduleSpecialty}] (疲勞: ${Math.round(staff.fatigue)}%)
+                    </option>
+                  `).join('')}
+                </select>
+
                 <div class="text-[11px] text-slate-400">
                   ${assignedStaff ? `
-                    <span>駐機人員：<strong class="text-slate-200">${assignedStaff.name}</strong> (疲勞 ${Math.round(assignedStaff.fatigue)}%)</span>
+                    <span>駐站人員：<strong class="text-slate-200">${assignedStaff.name}</strong> (專長: ${assignedStaff.moduleSpecialty} | 疲勞: <strong class="${assignedStaff.fatigue >= 80 ? 'text-red-400 font-bold' : 'text-emerald-400'}">${Math.round(assignedStaff.fatigue)}%</strong>)</span>
                   ` : `
-                    <span class="text-amber-400/80">💡 指派工程師駐機後，即可執行日常巡檢以降低磨損！</span>
+                    <span class="text-amber-400/80">💡 指派模組工程師駐站後，可啟動 TPM 零故障保護與執行精密 PM 預防保養！</span>
                   `}
                 </div>
-                <button
-                  id="btn-engineer-inspect"
-                  class="btn-sci-fi text-xs py-1.5 px-3 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/50 text-indigo-300 flex items-center gap-1.5 cursor-pointer ${!assignedStaff || (assignedStaff && assignedStaff.fatigue >= 95) ? 'opacity-50 cursor-not-allowed' : ''}"
-                  ${!assignedStaff || (assignedStaff && assignedStaff.fatigue >= 95) ? 'disabled' : ''}
-                  title="由駐機工程師對設備執行日常精密巡檢調校與落塵清除，降低 12% 磨損度並累積每日巡檢任務"
-                >
-                  <span>🔍</span>
-                  <span>工程師日常巡檢 (消耗 8% 疲勞)</span>
-                </button>
               </div>
-            </div>
 
-            <!-- 7. Machine Maintenance Actions -->
-            <div class="flex items-center gap-3 pt-2">
-              <button
-                id="btn-machine-overhaul"
-                class="flex-1 btn-sci-fi justify-center py-2.5 text-xs bg-cyan-700/80 hover:bg-cyan-600 ${state.player.cash < overhaulCost || machine.wear <= 5 ? 'opacity-50 cursor-not-allowed' : ''}"
-                ${state.player.cash < overhaulCost || machine.wear <= 5 ? 'disabled' : ''}
-              >
-                🛠️ 就地大修保養 (NT$ ${overhaulCost.toLocaleString()})
-              </button>
+              <!-- 雙軌清晰維護操作：工程師精密 PM 保養 vs 原廠專案大修 -->
+              <div class="pt-2 border-t border-slate-800/80 space-y-2">
+                <div class="text-[11px] font-bold text-slate-300">設備維護與調校作業：</div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <!-- 軌道一：工程師精密 PM 預防保養 -->
+                  <div class="p-3 rounded-lg bg-slate-950/70 border border-slate-800 flex flex-col justify-between space-y-2">
+                    <div>
+                      <div class="font-bold text-cyan-300 text-xs flex items-center gap-1.5">
+                        <span>🔍</span>
+                        <span>工程師精密預防保養 (PM)</span>
+                      </div>
+                      <p class="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                        由駐站工程師清潔腔體與真空光學校準。消耗 10% 疲勞，磨損立即歸零，並賦予次輪良率 +3.0% 調校加成！
+                      </p>
+                    </div>
+                    <button
+                      id="btn-engineer-pm"
+                      class="btn-sci-fi w-full justify-center text-xs py-2 bg-indigo-950/90 hover:bg-indigo-900 border border-indigo-500/50 text-indigo-300 font-bold ${!assignedStaff || (assignedStaff && assignedStaff.fatigue >= 90) ? 'opacity-50 cursor-not-allowed' : ''}"
+                      ${!assignedStaff || (assignedStaff && assignedStaff.fatigue >= 90) ? 'disabled' : ''}
+                      title="由駐站工程師執行腔體深入清潔與精密調校"
+                    >
+                      ${!assignedStaff ? '⚠️ 需先指派駐站工程師' : (assignedStaff.fatigue >= 90 ? '⚠️ 工程師過勞 (疲勞≥90%)' : '🔍 執行精密 PM 保養 (-10%疲勞)')}
+                    </button>
+                  </div>
 
-              <button
-                id="btn-machine-decommission"
-                class="px-4 py-2.5 rounded-lg bg-red-950/40 hover:bg-red-900 border border-red-800/40 text-red-300 text-xs transition-colors"
-              >
-                ♻️ 報廢變賣 (+NT$ ${resellPrice.toLocaleString()})
-              </button>
+                  <!-- 軌道二：原廠深度大修 -->
+                  <div class="p-3 rounded-lg bg-slate-950/70 border border-slate-800 flex flex-col justify-between space-y-2">
+                    <div>
+                      <div class="font-bold text-amber-300 text-xs flex items-center gap-1.5">
+                        <span>🛠️</span>
+                        <span>原廠專案深度大修 (Overhaul)</span>
+                      </div>
+                      <p class="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                        委請原廠設備商更換耗材零件，花費資金免消耗工程師疲勞。可修復所有磨損並解決故障停機。
+                      </p>
+                    </div>
+                    <button
+                      id="btn-machine-overhaul"
+                      class="btn-sci-fi w-full justify-center text-xs py-2 bg-cyan-800/80 hover:bg-cyan-700 border border-cyan-500/50 text-white font-bold ${state.player.cash < overhaulCost || (machine.wear <= 5 && machine.status !== 'EXPLODED' && machine.status !== 'MAINTENANCE') ? 'opacity-50 cursor-not-allowed' : ''}"
+                      ${state.player.cash < overhaulCost || (machine.wear <= 5 && machine.status !== 'EXPLODED' && machine.status !== 'MAINTENANCE') ? 'disabled' : ''}
+                      title="花費資金由原廠設備商執行深度大修"
+                    >
+                      🛠️ 原廠大修 (NT$ ${overhaulCost.toLocaleString()})
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 報廢變賣按鈕 -->
+                <div class="flex justify-end pt-1">
+                  <button
+                    id="btn-machine-decommission"
+                    class="px-3.5 py-1.5 rounded-lg bg-red-950/40 hover:bg-red-900 border border-red-800/40 text-red-300 text-xs transition-colors cursor-pointer"
+                  >
+                    ♻️ 報廢變賣此機台 (+NT$ ${resellPrice.toLocaleString()})
+                  </button>
+                </div>
+              </div>
             </div>
 
           </div>
@@ -512,31 +563,28 @@ export class MachinePanel {
       this.render(container, machine, state, onUpdate);
     });
 
-    // 執行工程師日常巡檢維護
-    document.getElementById('btn-engineer-inspect')?.addEventListener('click', () => {
+    // 執行工程師精密 PM 預防保養 (腔體調校與磨損歸零)
+    const handleEngineerPm = () => {
       if (!machine.assignedEngineerId) {
-        alert('請先在上方下拉選單指派駐機工程師，方可執行巡檢！');
+        alert('請先在上方下拉選單指派駐站工程師，方可執行精密 PM 保養！');
         return;
       }
 
       const staff = state.staff.find(s => s.id === machine.assignedEngineerId);
       if (!staff) return;
 
-      if (staff.fatigue >= 95) {
-        alert(`工程師 ${staff.name} 疲勞度過高 (${Math.round(staff.fatigue)}%)，體力不支無法執行巡檢！請至人資中心安排排休恢復精神！`);
-        return;
-      }
-
-      if (machine.wear <= 0) {
-        alert(`設備【${machine.name}】目前處於 100% 完美健康狀態，無需額外調校！`);
+      if (staff.fatigue >= 90) {
+        alert(`工程師 ${staff.name} 疲勞度過高 (${Math.round(staff.fatigue)}%)，體力不支無法執行調校！請至人資中心安排排休恢復精力！`);
         return;
       }
 
       SoundEffects.playClick();
-      // 降低磨損度 12%
-      machine.wear = Math.max(0, machine.wear - 12);
-      // 累積工程師疲勞 8%
-      staff.fatigue = Math.min(100, staff.fatigue + 8);
+      // 磨損立即歸零
+      machine.wear = 0;
+      // 賦予次輪良率調校加成
+      machine.hasPmTuneUpBonus = true;
+      // 消耗工程師疲勞 10%
+      staff.fatigue = Math.min(100, staff.fatigue + 10);
       // 推進每日任務
       QuestEngine.onMachineMaintained(state.questState);
       AchievementEngine.checkAchievements(state);
@@ -544,10 +592,13 @@ export class MachinePanel {
 
       onUpdate();
       this.render(container, machine, state, onUpdate);
-    });
+    };
 
-    // 就地大修
-    document.getElementById('btn-machine-overhaul')?.addEventListener('click', () => {
+    document.getElementById('btn-engineer-pm')?.addEventListener('click', handleEngineerPm);
+    document.getElementById('btn-engineer-inspect')?.addEventListener('click', handleEngineerPm);
+
+    // 原廠深度大修
+    document.getElementById('btn-machine-overhaul')?.addEventListener('click', (e) => {
       const spec = StoreModal.STORE_CATALOG.find(c => c.modelId === machine.modelId);
       const overhaulCost = spec ? Math.round(spec.price * 0.15) : 300_000;
 
@@ -558,6 +609,7 @@ export class MachinePanel {
 
       state.player.cash -= overhaulCost;
       FinanceEngine.recordMaintenance(state, overhaulCost);
+      CashFXManager.trigger(-overhaulCost, e.currentTarget as HTMLElement);
       machine.wear = 0;
       machine.status = 'IDLE';
 
@@ -566,7 +618,7 @@ export class MachinePanel {
       AchievementEngine.checkAchievements(state);
       SaveGameService.saveToLocalStorage(state);
 
-      SoundEffects.playClick();
+      SoundEffects.playCoinChime();
       onUpdate();
       this.render(container, machine, state, onUpdate);
     });

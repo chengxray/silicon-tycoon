@@ -190,8 +190,15 @@ export class YieldEngine {
     const effectiveLayerYield = Math.max(0.85, cleanroomLayerFactor - (wearPenalty / totalLayers));
     let baseCumulativeYield = Math.pow(effectiveLayerYield, Math.min(12, totalLayers));
 
-    // 疊加工程師調校紅利、PIE 整合良率紅利與微影視窗折損
-    let finalYield = baseCumulativeYield + staffBonus + pieBonus - opticalPenalty;
+    // 4.5 駐站工程師 PM 預防保養調校紅利 (PM Tune-up Bonus)
+    let pmBonus = 0;
+    const pmMachines = state.machines.filter(m => m.hasPmTuneUpBonus);
+    if (pmMachines.length > 0) {
+      pmBonus = 0.03; // 腔體精密保養賦予 +3% 良率調校加成
+    }
+
+    // 疊加工程師調校紅利、PIE 整合良率紅利、PM調校紅利與微影視窗折損
+    let finalYield = baseCumulativeYield + staffBonus + pieBonus + pmBonus - opticalPenalty;
 
     // 7. Q-Time 懲罰 (若該批次曾有逾期扣減)
     if (lot.yieldMultiplier < 0.99 && lot.yieldMultiplier > 0.0) {

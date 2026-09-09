@@ -16,9 +16,10 @@ import { ProductionEngine } from './engine/ProductionEngine';
 import { EconomyEngine } from './engine/EconomyEngine';
 import { FinanceEngine } from './engine/FinanceEngine';
 import { YieldEngine } from './engine/YieldEngine';
+import { HREngine } from './engine/HREngine';
 import { DevConsole } from './ui/DevConsole';
 import { MachinePanel } from './ui/MachinePanel';
-import { MachineData } from './types';
+import { MachineData, WorkShift } from './types';
 
 class FoundryGame {
   private state = SaveGameService.loadFromLocalStorage() || SaveGameService.createDefaultSave();
@@ -134,6 +135,9 @@ class FoundryGame {
       // 0.2 市場訂單等待時間過期檢查 (逾期未接單自動更換刷新)
       EconomyEngine.checkMarketOrdersExpiry(this.state);
 
+      // 0.3 人才招募市場時效過期與逐筆冷卻補齊檢查
+      HREngine.checkMarketCandidatesExpiry(this.state);
+
       // 1. 維護機台磨損與 🛡️ TPM 在線保養檢核
       const staffMap = new Map(this.state.staff.map((s) => [s.id, s]));
       for (const machine of this.state.machines) {
@@ -147,18 +151,34 @@ class FoundryGame {
         }
       }
 
-      // 1.1 員工疲勞度動態更新 (休假恢復 vs 上班累積)
-      for (const staff of this.state.staff) {
+      // 1.1 員工疲勞度動態更新 (休假急速恢復 vs 出勤常規累積)
+      const isWeekendNow = HREngine.isWeekend();
+      this.state.staff.forEach((staff, idx) => {
+        // 若為週休二日制：週末全廠自動排休迅速清空疲勞
+        if (staff.shiftMode === 'WEEKEND_REST') {
+          if (isWeekendNow) {
+            staff.workShift = 'OFF';
+          } else if (staff.workShift === 'OFF') {
+            // 平日若原本在週休，恢復正常三班輪值
+            const shifts: WorkShift[] = ['DAY', 'SWING', 'NIGHT'];
+            staff.workShift = shifts[idx % 3];
+          }
+        } else if (staff.shiftMode === 'TWO_ON_TWO_OFF') {
+          // 四班二輪制：依遊戲時間每 60 秒輪替 (做二休二)
+          const isOffCycle = (Math.floor(this.state.gameTime / 60) + idx) % 2 === 1;
+          staff.workShift = isOffCycle ? 'OFF' : 'DAY';
+        }
+
         if (staff.workShift === 'OFF') {
-          // 排休中：迅速恢復疲勞
-          staff.fatigue = Math.max(0, staff.fatigue - 0.25);
+          // 排休/週休中：以 10 倍速率急速恢復疲勞 (-2.0%/s)
+          staff.fatigue = Math.max(0, staff.fatigue - 2.0);
         } else {
-          // 出勤中：依兩班/三班與夜班乘數累積疲勞
-          const baseRate = staff.shiftMode === 'TWO_SHIFT' ? 0.05 : 0.02;
-          const shiftMultiplier = staff.workShift === 'NIGHT' ? 1.5 : 1.0;
+          // 出勤中：依班別與夜班乘數累積適度疲勞
+          const baseRate = staff.shiftMode === 'TWO_SHIFT' ? 0.04 : 0.02;
+          const shiftMultiplier = staff.workShift === 'NIGHT' ? 1.4 : 1.0;
           staff.fatigue = Math.min(100, staff.fatigue + baseRate * shiftMultiplier);
         }
-      }
+      });
 
       // 動態判定哪些站點正在加工，即時更新 machine.status (IDLE vs PROCESSING)
       const activeStations = new Set<string>();

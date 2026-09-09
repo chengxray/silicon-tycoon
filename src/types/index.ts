@@ -16,9 +16,20 @@ export type StaffSpecialty = MachineCategory | 'PIE';
 
 export type StaffRank = 'Young Specialist' | 'Skilled Worker' | 'Senior Engineer' | 'Fellow';
 
-export type ShiftMode = 'TWO_SHIFT' | 'THREE_SHIFT';
+export type ShiftMode = 'TWO_SHIFT' | 'THREE_SHIFT' | 'WEEKEND_REST' | 'TWO_ON_TWO_OFF';
 
 export type WorkShift = 'DAY' | 'SWING' | 'NIGHT' | 'OFF';
+
+export interface Candidate {
+  id: string;
+  name: string;
+  rank: StaffRank;
+  moduleSpecialty: StaffSpecialty;
+  signingBonus: number;
+  salary: number;
+  description: string;
+  marketExpiresAt?: number;
+}
 
 export type MachineStatus = 'IDLE' | 'PROCESSING' | 'MAINTENANCE' | 'EXPLODED';
 
@@ -68,6 +79,7 @@ export interface MachineData {
   status: MachineStatus;
   assignedEngineerId: string | null;
   pairedTrackIds?: string[]; // Litho machines can bind matching Track units
+  hasPmTuneUpBonus?: boolean; // 駐站工程師執行 PM 保養後之良率調校加成
 }
 
 export interface StaffData {
@@ -250,5 +262,7 @@ export interface SaveGameV2 {
   financialState?: FinancialState;
   marketOrders?: OrderData[];
   nextOrderRespawnTime?: number;
+  marketCandidates?: Candidate[];
+  nextCandidateRespawnTime?: number;
 }
 

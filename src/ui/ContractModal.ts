@@ -451,13 +451,19 @@ export class ContractModal {
                   <div class="flex items-center gap-2 w-full sm:w-auto">
                     <select class="select-order-pie bg-slate-900 border border-indigo-500/40 rounded-lg px-2.5 py-1 text-xs text-slate-200 font-mono focus:border-indigo-400 focus:outline-none cursor-pointer" data-order-id="${order.id}">
                       <option value="">-- 未指派 PIE (無加成) --</option>
-                      ${state.staff.map(s => {
-                        const b = YieldEngine.getPieBonus(s);
-                        const isSel = order.assignedPieId === s.id;
-                        return `<option value="${s.id}" ${isSel ? 'selected' : ''}>
-                          ${s.name} (${s.rank} / ${s.moduleSpecialty === 'PIE' ? 'PIE 專精' : s.moduleSpecialty}) [+${Math.round(b.speedBonus * 100)}%速 / +${(b.yieldBonus * 100).toFixed(1)}%良]
-                        </option>`;
-                      }).join('')}
+                      ${(() => {
+                        const pieStaffList = state.staff.filter(s => s.moduleSpecialty === 'PIE');
+                        if (pieStaffList.length === 0) {
+                          return '<option value="" disabled>-- 廠內無在職 PIE (請至人資市場招聘) --</option>';
+                        }
+                        return pieStaffList.map(s => {
+                          const b = YieldEngine.getPieBonus(s);
+                          const isSel = order.assignedPieId === s.id;
+                          return `<option value="${s.id}" ${isSel ? 'selected' : ''}>
+                            ${s.name} (${s.rank}) [+${Math.round(b.speedBonus * 100)}%速 / +${(b.yieldBonus * 100).toFixed(1)}%良]
+                          </option>`;
+                        }).join('');
+                      })()}
                     </select>
                   </div>
                 </div>
@@ -702,9 +708,12 @@ export class ContractModal {
         order.status = 'PENDING';
 
         // 自動指派廠內專任 PIE 工程師 (若有)
-        const defaultPie = state.staff.find(s => s.moduleSpecialty === 'PIE' && s.workShift !== 'OFF') || state.staff[0];
+        const defaultPie = state.staff.find(s => s.moduleSpecialty === 'PIE' && s.workShift !== 'OFF') 
+          || state.staff.find(s => s.moduleSpecialty === 'PIE');
         if (defaultPie) {
           order.assignedPieId = defaultPie.id;
+        } else {
+          order.assignedPieId = undefined;
         }
 
         // 3. 加入 activeOrders
